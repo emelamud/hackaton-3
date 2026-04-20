@@ -1,0 +1,91 @@
+<aside class="room-rail bg-surface-container-high border-l-outline-variant">
+  @if (room(); as r) {
+    <header class="room-rail__header px-4 py-3 border-b-outline-variant">
+      <span class="text-title-small m-0">Room info</span>
+    </header>
+
+    <div class="room-rail__info p-4 gap-2">
+      <div class="room-rail__name-row gap-2">
+        <mat-icon class="text-on-surface-variant">
+          {{ r.visibility === 'private' ? 'lock' : 'tag' }}
+        </mat-icon>
+        <span class="text-title-medium">{{ r.name }}</span>
+      </div>
+
+      <span
+        class="visibility-badge text-label-small px-2 py-1"
+        [class.visibility-badge--public]="r.visibility === 'public'"
+        [class.visibility-badge--private]="r.visibility === 'private'"
+      >
+        {{ r.visibility === 'private' ? 'Private' : 'Public' }}
+      </span>
+
+      @if (r.description) {
+        <p class="room-rail__description text-body-medium text-on-surface-variant m-0 mt-2">
+          {{ r.description }}
+        </p>
+      }
+
+      @if (ownerUsername()) {
+        <div class="room-rail__owner-row text-label-small text-on-surface-variant gap-1 mt-2">
+          <mat-icon class="room-rail__owner-icon">star</mat-icon>
+          <span>Owner: {{ ownerUsername() }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="room-rail__actions px-4 gap-2">
+      <button
+        mat-stroked-button
+        type="button"
+        disabled
+        matTooltip="Invitations arrive in a later round"
+      >
+        <mat-icon>person_add</mat-icon>
+        Invite user
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        disabled
+        matTooltip="Room management arrives in a later round"
+      >
+        <mat-icon>settings</mat-icon>
+        Manage room
+      </button>
+    </div>
+
+    <section class="room-rail__members">
+      <header class="room-rail__members-header px-4 pt-4 pb-2 text-label-medium text-on-surface-variant">
+        Members ({{ r.memberCount }})
+      </header>
+
+      <mat-list class="room-rail__members-list" dense>
+        @for (member of members(); track member.userId) {
+          <mat-list-item class="member-row">
+            <span matListItemAvatar class="member-row__avatar bg-primary text-on-primary text-label-small">
+              {{ member.username[0]?.toUpperCase() ?? '?' }}
+              <span class="presence-dot bg-tertiary" aria-hidden="true"></span>
+            </span>
+            <span matListItemTitle class="text-body-medium">{{ member.username }}</span>
+            @if (roleLabel(member); as label) {
+              <span
+                matListItemMeta
+                class="member-row__role text-label-small text-on-surface-variant"
+              >
+                {{ label }}
+              </span>
+            }
+          </mat-list-item>
+        }
+      </mat-list>
+    </section>
+  } @else {
+    <div class="room-rail__placeholder p-5 gap-2">
+      <mat-icon class="text-on-surface-variant">info</mat-icon>
+      <p class="text-body-medium text-on-surface-variant m-0">
+        Pick a room to see details.
+      </p>
+    </div>
+  }
+</aside>

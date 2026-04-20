@@ -1,0 +1,73 @@
+<h2 mat-dialog-title class="text-title-large m-0">Create a room</h2>
+
+<form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+  <mat-dialog-content>
+    <div class="create-room-form gap-4">
+      <mat-form-field appearance="outline">
+        <mat-label>Name</mat-label>
+        <input
+          matInput
+          formControlName="name"
+          autocomplete="off"
+          maxlength="64"
+          placeholder="e.g. engineering"
+          required
+        />
+        <mat-hint align="end">{{ form.controls.name.value?.length ?? 0 }}/64</mat-hint>
+        @if (nameServerError()) {
+          <mat-error>{{ nameServerError() }}</mat-error>
+        } @else if (form.controls.name.hasError('required') && form.controls.name.touched) {
+          <mat-error>Room name is required</mat-error>
+        } @else if (form.controls.name.hasError('minlength') && form.controls.name.touched) {
+          <mat-error>Name must be at least 3 characters</mat-error>
+        } @else if (form.controls.name.hasError('maxlength') && form.controls.name.touched) {
+          <mat-error>Name must be at most 64 characters</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Description</mat-label>
+        <textarea
+          matInput
+          formControlName="description"
+          maxlength="500"
+          rows="3"
+          placeholder="What is this room about?"
+        ></textarea>
+        <mat-hint align="end">{{ form.controls.description.value?.length ?? 0 }}/500</mat-hint>
+      </mat-form-field>
+
+      <div class="gap-2">
+        <span id="visibility-label" class="text-label-medium text-on-surface-variant"
+          >Visibility</span
+        >
+        <mat-radio-group
+          formControlName="visibility"
+          class="visibility-group gap-4"
+          aria-labelledby="visibility-label"
+        >
+          <mat-radio-button value="public">Public</mat-radio-button>
+          <mat-radio-button value="private">Private</mat-radio-button>
+        </mat-radio-group>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end" class="gap-2">
+    <button mat-stroked-button type="button" (click)="cancel()" [disabled]="submitting()">
+      Cancel
+    </button>
+    <button
+      mat-flat-button
+      color="primary"
+      type="submit"
+      [disabled]="form.invalid || submitting()"
+    >
+      @if (submitting()) {
+        <mat-progress-spinner diameter="20" mode="indeterminate" />
+      } @else {
+        Create room
+      }
+    </button>
+  </mat-dialog-actions>
+</form>

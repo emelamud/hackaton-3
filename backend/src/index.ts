@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { sessionsRouter } from './routes/sessions';
+import { roomsRouter } from './routes/rooms';
 import { errorHandler } from './middleware/errorHandler';
 import { config } from './config';
 
@@ -22,6 +23,7 @@ app.use(cookieParser());
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/auth/sessions', sessionsRouter);
+app.use('/api/rooms', roomsRouter);
 
 app.use(errorHandler);
 

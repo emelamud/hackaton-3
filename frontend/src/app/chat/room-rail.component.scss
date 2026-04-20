@@ -1,0 +1,104 @@
+@use 'sass:map';
+@use 'styles/tokens' as tokens;
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.room-rail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-left-width: 0.0625rem;
+  border-left-style: solid;
+  overflow-y: auto;
+}
+
+.room-rail__header {
+  flex-shrink: 0;
+  border-bottom-width: 0.0625rem;
+  border-bottom-style: solid;
+}
+
+.room-rail__info {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-rail__name-row,
+.room-rail__owner-row {
+  display: flex;
+  align-items: center;
+}
+
+.visibility-badge {
+  align-self: flex-start;
+  border-radius: 1rem;
+  font-weight: 500;
+
+  &--public {
+    background-color: map.get(tokens.$ds-colors, primary-container);
+    color: map.get(tokens.$ds-colors, on-primary-container);
+  }
+
+  &--private {
+    background-color: map.get(tokens.$ds-colors, secondary-container);
+    color: map.get(tokens.$ds-colors, on-secondary-container);
+  }
+}
+
+.room-rail__owner-icon {
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+.room-rail__actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.room-rail__members {
+  flex: 1;
+  min-height: 0;
+}
+
+.room-rail__members-header {
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+  font-weight: 600;
+}
+
+.member-row__avatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-weight: 500;
+}
+
+.presence-dot {
+  position: absolute;
+  right: -0.125rem;
+  bottom: -0.125rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border-width: 0.125rem;
+  border-style: solid;
+  border-color: map.get(tokens.$ds-colors, surface-container-high);
+}
+
+.room-rail__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+}

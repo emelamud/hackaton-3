@@ -1,0 +1,20 @@
+:host {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-state__icon {
+  font-size: 4rem;
+  width: 4rem;
+  height: 4rem;
+}

@@ -1,0 +1,15 @@
+.create-room-form {
+  display: flex;
+  flex-direction: column;
+  min-width: 22rem;
+}
+
+.visibility-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+#visibility-label {
+  display: block;
+}

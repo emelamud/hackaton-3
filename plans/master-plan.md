@@ -2,47 +2,111 @@
 
 ## Rounds
 
-### Round 1: Foundation — Docker + Auth + App Shell
+### Round 1: Foundation — Docker + Auth + App Shell ✅
 **Deliverable**: `docker compose up` works. User can register, log in, see the app shell, view and revoke active sessions.
 
 - **[Orchestrator]** Create `/shared/` folder; define User, Session, Auth types; write auth API contract; update agent descriptions and create subproject CLAUDE.md files
 - **[BE]** Docker setup (`docker/backend.Dockerfile`, `docker-compose.yml`); Drizzle migrations (users, sessions tables); auth endpoints (register, login, logout, refresh, forgot-password, reset-password, sessions list/revoke); JWT middleware
 - **[FE]** Docker setup (`docker/frontend.Dockerfile` + nginx); Sign In / Register / Forgot Password / Reset Password pages; auth service + JWT interceptor + route guards; app shell (top nav); sessions management page
 
-### Round 2: Chat Core — Rooms + Real-time Messaging
-**Deliverable**: Users can create/join public rooms, send and receive messages in real time, scroll through history.
+---
 
-- **[Orchestrator]** Room types, Message types, Socket.io event contracts, room API contract
-- **[BE]** Socket.io server with JWT auth, room CRUD, message persistence, real-time broadcast, paginated message history
-- **[FE]** Three-column chat shell (left sidebar / main chat / right rail), room list, message list with infinite scroll, message composer (text)
+### Round 2: Rooms — HTTP + Shell ✅
+**Deliverable**: User can create a public room, see a list of rooms in a sidebar, and open a room into an empty main pane. No messages yet.
 
-### Round 3: DMs + Presence + Friends
-**Deliverable**: Users can add friends, chat 1:1, and see online/AFK/offline status.
+- **[Orchestrator]** Room types (`Room`, `RoomMember`, `CreateRoomRequest`); room HTTP API contract (list, create, get, join, leave)
+- **[BE]** Drizzle migration for `rooms` + `room_members`; REST endpoints: `GET /rooms`, `POST /rooms`, `GET /rooms/:id`, `POST /rooms/:id/join`, `POST /rooms/:id/leave`; membership enforcement
+- **[FE]** Three-column chat shell (left sidebar / main / right rail); room list in left sidebar (auto-refresh on create); "Create Room" dialog; room detail route `/chat/:roomId` with empty message pane placeholder; room service
 
-- **[Orchestrator]** DM types, Presence types, Friend/contact types, DM + friend API contract
-- **[BE]** Friend request system, DM logic (two-participant chat), presence tracking via socket events, multi-tab presence aggregation
-- **[FE]** Friends list, friend request UI, DM conversations, presence indicators (●/◐/○)
+---
 
-### Round 4: Files + Message Features
-**Deliverable**: Users can attach files/images, reply to messages, and edit/delete their own messages.
+### Round 3: Real-time Messaging
+**Deliverable**: User can send a message in a room and receive messages from other users in real time. No history pagination yet.
 
-- **[Orchestrator]** Attachment types, reply/edit metadata types, file API contract
-- **[BE]** multer file upload, file serving with access control, message edit/delete endpoints
-- **[FE]** File/image attach (button + paste), image preview, reply-to-message UI, edit/delete actions
+- **[Orchestrator]** `Message` type; Socket.io event contract (`message:send`, `message:new`, `room:join`, `room:leave`); message POST contract (if any)
+- **[BE]** Wire Express to `http.createServer`; Socket.io server with JWT handshake middleware; `messages` table migration; persist on `message:send`; broadcast `message:new` to room members
+- **[FE]** Socket.io-client service with auto-connect on login; join/leave socket rooms on route change; message composer (text + Enter-to-send); live message list rendering new messages
 
-### Round 5: Moderation + Notifications + Polish
-**Deliverable**: Room admins have full moderation tools; unread indicators work; public room catalog works.
+---
 
-- **[Orchestrator]** Admin action types, notification/unread types, ban types, invitation types
-- **[BE]** Room ban/unban, remove member, manage admins, invite user, room settings update, unread count tracking, public room catalog + search
-- **[FE]** Manage Room dialog (Members/Admins/Banned/Invitations/Settings tabs), unread badges on sidebar, public room catalog with search, admin context menus
+### Round 4: Invitations + Room Settings
+**Deliverable**: Admins can invite users to private rooms and edit room name/description/visibility; invitees see live notifications.
 
-### Round 6: Jabber/XMPP Federation (Optional)
-**Deliverable**: Users can connect via Jabber client; two-server federation works.
+- **[Orchestrator]** `Invitation` type; invitation + room-settings API contract; socket events `invitation:new` (to invitee) and `room:updated` (to members)
+- **[BE]** Invitation create/accept/revoke endpoints; `invitations` table; `PATCH /rooms/:id` for settings; emit `invitation:new` on create and `room:updated` on patch
+- **[FE]** Manage Room dialog scaffolding — **Invitations** + **Settings** tabs (other tabs added in later rounds); invite-by-username flow; incoming invitation acceptance UI; live room-header refresh on `room:updated`
 
-- **[Orchestrator]** Jabber connection types, federation event types
-- **[BE]** Jabber library integration, XMPP server, federation docker-compose config, admin dashboard endpoints
-- **[FE]** Jabber connection dashboard (admin), federation traffic stats page
+---
+
+### Round 5: Message History + Pagination
+**Deliverable**: User can scroll up through full message history with smooth infinite scroll; unread/anchor behavior feels right.
+
+- **[Orchestrator]** Paginated history API contract (`GET /rooms/:id/messages?before=&limit=`); `MessageHistoryResponse` type
+- **[BE]** Cursor-paginated history endpoint; order + index optimization on `messages(room_id, created_at)`
+- **[FE]** Infinite scroll on the message list (load more on scroll-to-top); preserve scroll anchor when prepending; initial scroll to bottom on room open
+
+---
+
+### Round 6: Friends
+**Deliverable**: Users can send, accept, and reject friend requests, and see a friends list in the sidebar.
+
+- **[Orchestrator]** `Friend`, `FriendRequest` types; friend API contract
+- **[BE]** `friends` + `friend_requests` tables; send/accept/reject/cancel/remove endpoints; user search endpoint
+- **[FE]** Friends panel in left sidebar; "Add Friend" dialog with user search; pending/incoming request list; accept/reject controls
+
+---
+
+### Round 7: Direct Messages
+**Deliverable**: From the friends list, users can open a 1:1 DM and exchange messages in real time (reuses Round 3 message infra).
+
+- **[Orchestrator]** Extend room types with `type: 'public' | 'dm'`; `OpenDmRequest` contract
+- **[BE]** DM creation endpoint (upsert two-participant dm room); enforce dm-specific membership rules; reuse message table + socket events
+- **[FE]** DM list section in sidebar; "Message" action on a friend opens/creates DM; DM header shows other participant
+
+---
+
+### Round 8: Presence
+**Deliverable**: Users see online / AFK / offline dots next to friends and DM participants; state is consistent across tabs.
+
+- **[Orchestrator]** `PresenceState` type; presence socket event contract (`presence:update`, `presence:snapshot`)
+- **[BE]** In-memory presence map keyed by userId; aggregate across sockets (online if any tab connected); emit on connect/disconnect + idle timeout
+- **[FE]** Presence indicators (●/◐/○) on friends list, DM headers, room member rail; subscribe to presence events on connect
+
+---
+
+### Round 9: Attachments
+**Deliverable**: Users can attach files/images to messages; recipients see inline image previews.
+
+- **[Orchestrator]** `Attachment` type; file upload API contract; message type extended with `attachments?: Attachment[]`
+- **[BE]** `multer` file upload endpoint (size + mime whitelist); file serving with per-message access control; `attachments` table
+- **[FE]** Attach button + drag-and-drop + paste handler in composer; inline image preview in messages; fallback file card for non-images
+
+---
+
+### Round 10: Message Actions
+**Deliverable**: Users can reply to messages, and edit or delete their own messages.
+
+- **[Orchestrator]** Extend `Message` with `editedAt`, `deletedAt`, `replyToId`; reply/edit/delete event + REST contract
+- **[BE]** Edit/delete endpoints (author-only); `message:edit`, `message:delete` socket broadcasts; reply metadata resolution
+- **[FE]** Message hover toolbar (reply / edit / delete); reply preview in composer; rendered reply quote block above message; edited/deleted indicators
+
+---
+
+### Round 11: Room Moderation
+**Deliverable**: Room admins can ban, unban, remove members, and promote/demote admins.
+
+- **[Orchestrator]** `RoomRole` extensions; ban/member-management API contract; admin-action socket events
+- **[BE]** Ban/unban/remove/promote/demote endpoints; `room_bans` table; role-based authorization middleware; kick broadcast
+- **[FE]** Member context menu (admin-only actions); extend Manage Room dialog (built in Round 4) with **Members**, **Admins**, **Banned** tabs
+
+---
+
+### Round 12: Unread + Public Catalog
+**Deliverable**: Unread badges appear on the sidebar; users can browse and search a public room catalog.
+
+- **[Orchestrator]** Unread count types; public catalog API contract (search + pagination)
+- **[BE]** Unread tracking (per-user last-read cursor per room); `GET /rooms/catalog?q=&cursor=`; search by name/description
+- **[FE]** Unread badges on sidebar room/DM items; clear-on-open behavior; Public Rooms catalog page with search input and join buttons
 
 ---
 
@@ -53,5 +117,6 @@ After every round, each agent writes `plans/round-N/summary-<role>.md`:
 - **Deviations**: anything that differs from the task description or API contract
 - **Deferred**: items skipped or left incomplete
 - **Next round needs to know**: decisions that affect Round N+1
+- **Config improvements**: proposed follow-up changes to settings / tooling / agent configs
 
 Summaries become input context when expanding the next round's detailed task files.

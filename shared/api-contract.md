@@ -138,3 +138,108 @@ Reset password using the token from the forgot-password flow.
 **Errors**:
 - `403` — session does not belong to the current user
 - `404` — session not found
+
+---
+
+## Rooms Endpoints
+
+All rooms endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Room `name` must be unique across the whole system (requirement §2.4.2). Comparison is case-insensitive; the original casing is stored and returned.
+- Validation bounds: `name` 3–64 chars (trimmed), `description` 0–500 chars (trimmed, optional), `visibility` must be `"public"` or `"private"`.
+- `POST /api/rooms/:id/join` on a private room returns `403` for Round 2a. Invitations come in Round 5b.
+- Members in `RoomDetail.members` are ordered: owner first, then admins by `joinedAt` ascending, then regular members by `joinedAt` ascending.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| GET | `/api/rooms` | — | `200 Room[]` (caller's memberships, newest first) | — |
+| POST | `/api/rooms` | `CreateRoomRequest` | `201 RoomDetail` (creator auto-joined as `owner`) | `400` validation, `409` name taken |
+| GET | `/api/rooms/:id` | — | `200 RoomDetail` | `403` not a member, `404` not found |
+| POST | `/api/rooms/:id/join` | — | `200 RoomDetail` (idempotent if already member) | `403` private room, `404` not found |
+| POST | `/api/rooms/:id/leave` | — | `204` | `403` owner cannot leave, `404` not a member |
+
+---
+
+### GET `/api/rooms`
+List rooms the caller is a member of, ordered by `createdAt` descending.
+
+**Success** `200`:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "engineering",
+    "description": "Backend + frontend discussions",
+    "visibility": "public",
+    "ownerId": "uuid",
+    "createdAt": "ISO",
+    "memberCount": 12
+  }
+]
+```
+
+---
+
+### POST `/api/rooms`
+Create a new room. The creator is auto-joined with `role: "owner"`.
+
+**Request body** (`CreateRoomRequest`):
+```json
+{ "name": "engineering", "description": "Backend + frontend discussions", "visibility": "public" }
+```
+
+**Success** `201` — returns `RoomDetail`:
+```json
+{
+  "id": "uuid",
+  "name": "engineering",
+  "description": "Backend + frontend discussions",
+  "visibility": "public",
+  "ownerId": "uuid",
+  "createdAt": "ISO",
+  "memberCount": 1,
+  "members": [
+    { "roomId": "uuid", "userId": "uuid", "username": "alice", "role": "owner", "joinedAt": "ISO" }
+  ]
+}
+```
+
+**Errors**:
+- `400` — validation error: `{ "error": "...", "details": [...] }`
+- `409` — name taken (case-insensitive): `{ "error": "Room name already taken" }`
+
+---
+
+### GET `/api/rooms/:id`
+Fetch full room detail including members. Caller must be a member.
+
+**Success** `200` — `RoomDetail` (shape identical to `POST /api/rooms` success body).
+
+**Errors**:
+- `403` — caller is not a member: `{ "error": "Forbidden" }`
+- `404` — room not found: `{ "error": "Room not found" }`
+
+---
+
+### POST `/api/rooms/:id/join`
+Join a public room. Idempotent: calling when already a member returns `200` with the current detail and makes no changes.
+
+**Success** `200` — `RoomDetail`.
+
+**Errors**:
+- `403` — room is private (no invitation flow yet): `{ "error": "Private room — invitation required" }`
+- `404` — room not found: `{ "error": "Room not found" }`
+
+---
+
+### POST `/api/rooms/:id/leave`
+Leave a room. The owner cannot leave their own room (requirement §2.4.5) — they must delete it instead (room deletion is Round 5a).
+
+**Success** `204`
+
+**Errors**:
+- `403` — caller is the owner: `{ "error": "Owner cannot leave their own room" }`
+- `404` — caller is not a member of this room: `{ "error": "Room not found" }`

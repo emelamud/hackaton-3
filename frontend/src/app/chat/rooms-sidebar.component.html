@@ -1,0 +1,118 @@
+<aside class="rooms-sidebar bg-surface-container-high border-r-outline-variant">
+  <header class="rooms-sidebar__header px-4 py-3 gap-2 border-b-outline-variant">
+    <span class="text-title-medium m-0">Rooms</span>
+    <button
+      mat-icon-button
+      type="button"
+      class="ml-auto"
+      matTooltip="Create room"
+      aria-label="Create room"
+      (click)="openCreateDialog()"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  </header>
+
+  <div class="rooms-sidebar__search px-3 py-2">
+    <mat-form-field appearance="outline" class="rooms-sidebar__search-field" subscriptSizing="dynamic">
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Search rooms</mat-label>
+      <input matInput type="text" [formControl]="searchControl" autocomplete="off" />
+    </mat-form-field>
+  </div>
+
+  <div class="rooms-sidebar__list">
+    @if (loading()) {
+      <div class="rooms-sidebar__loading px-4 py-3 gap-2">
+        <mat-progress-spinner diameter="20" mode="indeterminate" />
+        <span class="text-body-medium text-on-surface-variant">Loading rooms…</span>
+      </div>
+    } @else if (loadError()) {
+      <div class="rooms-sidebar__error bg-error-container text-on-error-container p-3 gap-2">
+        <mat-icon>error_outline</mat-icon>
+        <span class="text-body-medium">Failed to load rooms.</span>
+        <button mat-stroked-button (click)="reload()">Retry</button>
+      </div>
+    } @else if (rooms().length === 0) {
+      <div class="rooms-sidebar__empty px-4 py-3">
+        <p class="text-body-medium text-on-surface-variant m-0">
+          No rooms yet. Create one to get started.
+        </p>
+      </div>
+    } @else {
+      @if (publicRooms().length > 0) {
+        <div class="rooms-sidebar__group">
+          <div
+            class="rooms-sidebar__group-header px-4 pt-3 pb-1 text-label-small text-on-surface-variant"
+          >
+            Public Rooms
+          </div>
+          <mat-nav-list class="rooms-sidebar__nav" dense>
+            @for (room of publicRooms(); track room.id) {
+              <a
+                mat-list-item
+                class="room-item"
+                [routerLink]="['/chat', room.id]"
+                routerLinkActive="room-item--active"
+              >
+                <mat-icon matListItemIcon class="room-item__icon text-on-surface-variant"
+                  >tag</mat-icon
+                >
+                <span matListItemTitle class="room-item__name text-body-medium">{{
+                  room.name
+                }}</span>
+                <span
+                  matListItemMeta
+                  class="room-item__count text-label-small text-on-surface-variant"
+                >
+                  {{ room.memberCount }}
+                </span>
+              </a>
+            }
+          </mat-nav-list>
+        </div>
+      }
+
+      @if (privateRooms().length > 0) {
+        <div class="rooms-sidebar__group">
+          <div
+            class="rooms-sidebar__group-header px-4 pt-3 pb-1 text-label-small text-on-surface-variant"
+          >
+            Private Rooms
+          </div>
+          <mat-nav-list class="rooms-sidebar__nav" dense>
+            @for (room of privateRooms(); track room.id) {
+              <a
+                mat-list-item
+                class="room-item"
+                [routerLink]="['/chat', room.id]"
+                routerLinkActive="room-item--active"
+              >
+                <mat-icon matListItemIcon class="room-item__icon text-on-surface-variant"
+                  >lock</mat-icon
+                >
+                <span matListItemTitle class="room-item__name text-body-medium">{{
+                  room.name
+                }}</span>
+                <span
+                  matListItemMeta
+                  class="room-item__count text-label-small text-on-surface-variant"
+                >
+                  {{ room.memberCount }}
+                </span>
+              </a>
+            }
+          </mat-nav-list>
+        </div>
+      }
+
+      @if (search() && publicRooms().length === 0 && privateRooms().length === 0) {
+        <div class="rooms-sidebar__empty px-4 py-3">
+          <p class="text-body-medium text-on-surface-variant m-0">
+            No rooms match "{{ search() }}".
+          </p>
+        </div>
+      }
+    }
+  </div>
+</aside>

@@ -44,9 +44,19 @@ export const routes: Routes = [
       {
         path: 'chat',
         loadComponent: () =>
-          import('./shell/chat-placeholder/chat-placeholder.component').then(
-            (m) => m.ChatPlaceholderComponent,
-          ),
+          import('./chat/chat-layout.component').then((m) => m.ChatLayoutComponent),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./chat/empty-state.component').then((m) => m.EmptyStateComponent),
+          },
+          {
+            path: ':roomId',
+            loadComponent: () =>
+              import('./chat/room-view.component').then((m) => m.RoomViewComponent),
+          },
+        ],
       },
       {
         path: 'sessions',

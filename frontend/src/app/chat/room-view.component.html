@@ -1,0 +1,36 @@
+<section class="room-view bg-surface">
+  @if (loading()) {
+    <div class="room-view__loading gap-3 p-7">
+      <mat-progress-spinner diameter="32" mode="indeterminate" />
+      <span class="text-body-medium text-on-surface-variant">Loading room…</span>
+    </div>
+  } @else if (room(); as r) {
+    <header class="room-view__header px-5 py-4 border-b-outline-variant">
+      <div class="room-view__title-row gap-2">
+        <mat-icon class="room-view__icon text-on-surface-variant">
+          {{ r.visibility === 'private' ? 'lock' : 'tag' }}
+        </mat-icon>
+        <h1 class="text-title-medium m-0">{{ r.name }}</h1>
+      </div>
+      @if (r.description) {
+        <p class="room-view__description text-body-medium text-on-surface-variant m-0 mt-1">
+          {{ r.description }}
+        </p>
+      }
+    </header>
+
+    <div class="room-view__messages p-5">
+      <div class="room-view__placeholder border-outline-variant text-on-surface-variant p-6 gap-3">
+        <mat-icon class="room-view__placeholder-icon">chat_bubble_outline</mat-icon>
+        <p class="text-body-medium m-0">
+          No messages yet — real-time chat comes in the next round.
+        </p>
+      </div>
+    </div>
+  } @else if (loadError()) {
+    <div class="room-view__error bg-error-container text-on-error-container p-4 m-5 gap-3">
+      <mat-icon>error_outline</mat-icon>
+      <span class="text-body-medium">Unable to load this room.</span>
+    </div>
+  }
+</section>
