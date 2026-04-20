@@ -30,6 +30,12 @@ docker-compose.yml
 - Never hardcode secrets or connection strings in source code
 - Provide a `.env.example` with all required keys but no real values
 
+## Agent Usage
+- For frontend tasks, delegate to the **frontend-developer** subagent
+- For backend tasks, delegate to the **backend-developer** subagent
+- Run FE and BE tasks in parallel when they are independent
+- shared folder (containing contracts and types) should be changed by orcestrator agent, either FE or BE developer **cannot** touch it
+
 ## Linting & Formatting
 - Follow the ESLint and Prettier configuration files in each subproject
 - All code must pass linting before being considered complete

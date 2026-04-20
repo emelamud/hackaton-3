@@ -1,0 +1,15 @@
+// Typography utilities — one class per M3 typescale role.
+// Each class sets font-family, size, line-height, weight, letter-spacing in one go
+// by consuming the Material-generated --mat-sys-*-{font,size,line-height,weight,tracking} vars.
+
+@use 'tokens' as *;
+
+@each $role in $ds-typography-roles {
+  .text-#{$role} {
+    font-family:    var(--mat-sys-#{$role}-font);
+    font-size:      var(--mat-sys-#{$role}-size);
+    line-height:    var(--mat-sys-#{$role}-line-height);
+    font-weight:    var(--mat-sys-#{$role}-weight);
+    letter-spacing: var(--mat-sys-#{$role}-tracking);
+  }
+}

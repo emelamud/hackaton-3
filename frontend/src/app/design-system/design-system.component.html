@@ -1,0 +1,230 @@
+<div class="ds-page bg-background text-on-background">
+  <header class="ds-header bg-surface-container-high border-b-outline-variant px-5 py-4 gap-4">
+    <div>
+      <h1 class="text-headline-small m-0">Design System</h1>
+      <p class="text-body-small text-on-surface-variant m-0 mt-1">
+        Source of truth for the chat app — see frontend/docs/DESIGN_SYSTEM.md
+      </p>
+    </div>
+    <app-theme-toggle class="ds-header__toggle ml-auto" />
+  </header>
+
+  <main class="ds-main px-5 py-5 gap-7">
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Colors — role pairs</h2>
+      <div class="ds-swatches gap-3">
+        @for (pair of rolePairs; track pair.label) {
+          <div class="ds-swatch border-outline-variant bg-{{ pair.bg }} text-{{ pair.on }} p-4">
+            <div class="text-label-large">{{ pair.label }}</div>
+            <div class="text-label-small">bg-{{ pair.bg }}</div>
+            <div class="text-label-small">text-{{ pair.on }}</div>
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Colors — surfaces</h2>
+      <div class="ds-swatches gap-3">
+        @for (s of surfaces; track s.label) {
+          <div class="ds-swatch border-outline-variant bg-{{ s.bg }} text-{{ s.on }} p-4">
+            <div class="text-label-large">{{ s.label }}</div>
+            <div class="text-label-small">bg-{{ s.bg }}</div>
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Typography ladder</h2>
+      <div class="ds-type bg-surface-container border-outline-variant p-5 gap-3">
+        @for (role of typographyRoles; track role) {
+          <div class="ds-type__row gap-4">
+            <code class="ds-type__label text-label-small text-on-surface-variant">text-{{ role }}</code>
+            <span class="text-{{ role }}">The quick brown fox jumps over the lazy dog</span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Spacing scale</h2>
+      <div class="ds-spacing bg-surface-container border-outline-variant p-5 gap-3">
+        @for (step of spacingSteps; track step) {
+          <div class="ds-spacing__row gap-4">
+            <code class="ds-spacing__label text-label-small text-on-surface-variant">*-{{ step }}</code>
+            <div class="bg-primary p-{{ step }}">
+              <div class="ds-spacing__inner bg-primary-container"></div>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Buttons</h2>
+      <div class="bg-surface-container border-outline-variant p-5 gap-3 ds-button-grid">
+        <button mat-flat-button color="primary">Primary (flat)</button>
+        <button mat-stroked-button>Secondary (stroked)</button>
+        <button mat-button>Tertiary (text)</button>
+        <button mat-raised-button color="primary">Raised</button>
+        <button mat-icon-button aria-label="Attach"><mat-icon>attach_file</mat-icon></button>
+        <button mat-flat-button color="warn">Destructive</button>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Form</h2>
+      <form [formGroup]="form" class="bg-surface-container border-outline-variant p-5 gap-4 ds-form">
+        <mat-form-field appearance="outline">
+          <mat-label>Name</mat-label>
+          <input matInput formControlName="name" required />
+          @if (form.controls.name.hasError('required') && form.controls.name.touched) {
+            <mat-error>Name is required</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" required />
+          <mat-hint>We will never share your email</mat-hint>
+          @if (form.controls.email.hasError('email') && form.controls.email.touched) {
+            <mat-error>Enter a valid email</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Message</mat-label>
+          <textarea matInput formControlName="message" cdkTextareaAutosize [cdkAutosizeMinRows]="3"></textarea>
+        </mat-form-field>
+        <div class="gap-3 ds-form__actions">
+          <button mat-stroked-button type="button">Cancel</button>
+          <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid">Save</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Chat recipes</h2>
+
+      <div class="ds-chat border-outline-variant">
+        <aside class="ds-chat__sidenav bg-surface-container-high">
+          <div class="ds-chat__brand px-4 py-3 border-b-outline-variant">
+            <span class="text-title-medium">Workspace</span>
+          </div>
+          <ul class="ds-chat__list p-2 gap-1">
+            @for (ch of channels; track ch.name) {
+              <li>
+                <button
+                  class="ds-chat__item px-3 py-2 gap-2"
+                  [class.ds-chat__item--active]="ch.active"
+                >
+                  <mat-icon class="text-on-surface-variant">tag</mat-icon>
+                  <span class="text-body-medium">{{ ch.name }}</span>
+                  @if (ch.unread > 0) {
+                    <span class="ds-chat__badge ml-auto bg-primary text-on-primary text-label-small px-2">
+                      {{ ch.unread }}
+                    </span>
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        </aside>
+
+        <div class="ds-chat__main bg-surface">
+          <header class="ds-chat__topbar px-4 py-3 border-b-outline-variant gap-2">
+            <mat-icon class="text-on-surface-variant">tag</mat-icon>
+            <h3 class="text-title-medium m-0">general</h3>
+            <span class="text-label-small text-on-surface-variant ml-2">4 members</span>
+          </header>
+
+          <div class="ds-chat__messages py-3 gap-3">
+            @for (m of messages; track m.time) {
+              <article class="ds-chat__message px-4 gap-3">
+                <div class="ds-chat__avatar bg-tertiary-container text-on-tertiary-container">
+                  {{ m.author[0] }}
+                </div>
+                <div class="ds-chat__body">
+                  <header class="gap-2">
+                    <span class="text-title-small">{{ m.author }}</span>
+                    <time class="text-label-small text-on-surface-variant">{{ m.time }}</time>
+                  </header>
+                  <p class="text-body-medium m-0">{{ m.body }}</p>
+                </div>
+              </article>
+            }
+          </div>
+
+          <footer class="ds-chat__composer bg-surface-container-low border-t-outline-variant p-3 gap-2">
+            <mat-form-field appearance="outline" class="ds-chat__input">
+              <textarea matInput cdkTextareaAutosize [cdkAutosizeMinRows]="1" [cdkAutosizeMaxRows]="6"
+                placeholder="Message #general"></textarea>
+            </mat-form-field>
+            <button mat-icon-button type="button" aria-label="Attach">
+              <mat-icon>attach_file</mat-icon>
+            </button>
+            <button mat-flat-button color="primary" type="button">Send</button>
+          </footer>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Dialogs &amp; snackbars</h2>
+      <div class="bg-surface-container border-outline-variant p-5 gap-3 ds-button-grid">
+        <button mat-flat-button color="primary" (click)="openDialog()">Open dialog</button>
+        <button mat-stroked-button (click)="openSnackbar()">Show snackbar</button>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">States</h2>
+      <div class="ds-states gap-4">
+        <div class="ds-state bg-surface-container border-outline-variant p-5 gap-3">
+          <div class="gap-3 ds-state__row">
+            <mat-progress-spinner mode="indeterminate" diameter="24" />
+            <span class="text-body-medium text-on-surface-variant">Loading messages…</span>
+          </div>
+        </div>
+
+        <div class="ds-state bg-surface-container border-outline-variant p-5 gap-3">
+          <div class="ds-state__empty gap-3">
+            <mat-icon class="ds-state__icon text-on-surface-variant">forum</mat-icon>
+            <div class="text-title-medium">No messages yet</div>
+            <div class="text-body-medium text-on-surface-variant">Be the first to say hi in #general.</div>
+            <button mat-flat-button color="primary">Say hi</button>
+          </div>
+        </div>
+
+        <div class="ds-state bg-error-container text-on-error-container p-5 gap-3">
+          <div class="gap-2">
+            <span class="text-title-small">Could not load messages</span>
+            <span class="text-body-medium">Check your connection and try again.</span>
+          </div>
+          <button mat-stroked-button>Retry</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="gap-4">
+      <h2 class="text-title-large m-0">Icons</h2>
+      <div class="bg-surface-container border-outline-variant p-5 gap-4 ds-icons">
+        @for (name of ['send','tag','attach_file','person','search','settings','notifications','forum']; track name) {
+          <div class="ds-icons__item gap-2">
+            <mat-icon>{{ name }}</mat-icon>
+            <code class="text-label-small text-on-surface-variant">{{ name }}</code>
+          </div>
+        }
+      </div>
+    </section>
+  </main>
+</div>

@@ -1,1 +1,30 @@
-/* You can add global styles to this file, and also import other style files */
+// Angular Material M3 theme — azure primary, blue tertiary, Roboto, density 0.
+// See frontend/docs/DESIGN_SYSTEM.md for usage rules.
+
+@use '@angular/material' as mat;
+@use 'styles/theme';
+@use 'styles/utilities-color';
+@use 'styles/utilities-typography';
+@use 'styles/utilities-spacing';
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  background-color: var(--mat-sys-background);
+  color: var(--mat-sys-on-background);
+  font-family: var(--mat-sys-body-medium-font);
+  font-size: var(--mat-sys-body-medium-size);
+  line-height: var(--mat-sys-body-medium-line-height);
+}

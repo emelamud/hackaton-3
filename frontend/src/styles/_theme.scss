@@ -1,0 +1,16 @@
+// Theme wiring.
+// Default: follow the user's OS preference via `color-scheme: light dark`.
+// Override: ThemeService writes `color-scheme: light` or `color-scheme: dark` on <html>
+// via explicit classes `.theme-light` / `.theme-dark`.
+
+html {
+  color-scheme: light dark;
+}
+
+html.theme-light {
+  color-scheme: light;
+}
+
+html.theme-dark {
+  color-scheme: dark;
+}

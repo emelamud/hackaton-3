@@ -1,0 +1,25 @@
+// Color utilities — role-based. Resolve to --mat-sys-* so dark mode works for free.
+// Do NOT use --mat-sys-* directly in component code. Use these classes instead.
+
+@use 'sass:map';
+@use 'tokens' as *;
+
+// bg-* and text-* roles (text uses on-* pair semantics handled by role names like on-primary)
+@each $name, $var in $ds-colors {
+  .bg-#{$name}   { background-color: #{$var}; }
+  .text-#{$name} { color: #{$var}; }
+}
+
+// border-* roles — restricted to the subset that has line semantics
+$ds-border-roles: (outline, outline-variant, primary, error);
+
+@each $name in $ds-border-roles {
+  $var: map.get($ds-colors, $name);
+  .border-#{$name} {
+    border: 0.0625rem solid #{$var};
+  }
+  .border-t-#{$name} { border-top:    0.0625rem solid #{$var}; }
+  .border-r-#{$name} { border-right:  0.0625rem solid #{$var}; }
+  .border-b-#{$name} { border-bottom: 0.0625rem solid #{$var}; }
+  .border-l-#{$name} { border-left:   0.0625rem solid #{$var}; }
+}
