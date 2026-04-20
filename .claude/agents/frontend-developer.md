@@ -45,4 +45,4 @@ After implementing a feature, start `ng serve` and use Playwright MCP to navigat
 Before marking a task complete, verify in the browser (light + dark mode) and confirm no `--mat-sys-*`, hex, or `px` appear in your diff.
 
 ## Round workflow
-When implementing a round's tasks, always end by writing `plans/round-N/summary-frontend.md` with sections: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**.
+When implementing a round's tasks, always end by writing `plans/round-N/frontend_work_summary.md` with sections: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**.

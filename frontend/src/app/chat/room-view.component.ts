@@ -5,6 +5,7 @@ import {
   inject,
   OnDestroy,
   signal,
+  ViewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,12 +17,21 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatButtonModule } from '@angular/material/button';
 import { RoomsService } from './rooms.service';
 import { ChatContextService } from './chat-context.service';
-import type { RoomDetail } from '../../../../shared/types';
+import { MessageListComponent } from './message-list.component';
+import { MessageComposerComponent } from './message-composer.component';
+import type { Message, RoomDetail } from '../../../../shared/types';
 
 @Component({
   selector: 'app-room-view',
   standalone: true,
-  imports: [MatIconModule, MatProgressSpinnerModule, MatSnackBarModule, MatButtonModule],
+  imports: [
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatSnackBarModule,
+    MatButtonModule,
+    MessageListComponent,
+    MessageComposerComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './room-view.component.html',
   styleUrl: './room-view.component.scss',
@@ -37,6 +47,8 @@ export class RoomViewComponent implements OnDestroy {
   readonly loading = signal(false);
   readonly loadError = signal(false);
   readonly room = signal<RoomDetail | null>(null);
+
+  @ViewChild(MessageListComponent) messageList?: MessageListComponent;
 
   constructor() {
     this.route.paramMap
@@ -76,6 +88,15 @@ export class RoomViewComponent implements OnDestroy {
           }
         },
       });
+  }
+
+  /**
+   * Forward the composer's ack result straight into the list.
+   * The server broadcast excludes the sender socket, so this is how the
+   * sender sees their own message.
+   */
+  onMessageSent(message: Message): void {
+    this.messageList?.appendMessage(message);
   }
 
   ngOnDestroy(): void {

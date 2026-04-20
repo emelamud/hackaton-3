@@ -1,0 +1,24 @@
+:host {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+}
+
+.composer__field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.composer__send {
+  flex: 0 0 auto;
+}
+
+// Trim the bottom padding that MatFormField reserves for the subscript wrapper
+// so the composer row has a consistent, dense height when there's no error.
+.composer__field ::ng-deep .mat-mdc-form-field-subscript-wrapper:empty {
+  display: none;
+}

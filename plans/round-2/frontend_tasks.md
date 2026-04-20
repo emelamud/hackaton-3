@@ -116,7 +116,7 @@ Per `.claude/agents/frontend-developer.md`:
 4. Confirm responsive: resize to <56.5rem, layout doesn't explode
 
 ## Wrap-up
-Write `plans/round-2/summary-frontend.md` with:
+Write `plans/round-2/frontend_work_summary.md` with:
 - **Built** — components, service, routes
 - **Deviations** — anything that differs from this plan or the contract (especially right-rail data-sharing choice)
 - **Deferred** — visual-only buttons, mobile drawer polish, presence dots (all intentional)

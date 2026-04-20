@@ -19,14 +19,12 @@
       }
     </header>
 
-    <div class="room-view__messages p-5">
-      <div class="room-view__placeholder border-outline-variant text-on-surface-variant p-6 gap-3">
-        <mat-icon class="room-view__placeholder-icon">chat_bubble_outline</mat-icon>
-        <p class="text-body-medium m-0">
-          No messages yet — real-time chat comes in the next round.
-        </p>
-      </div>
-    </div>
+    <app-message-list class="room-view__messages" [roomId]="r.id" />
+    <app-message-composer
+      class="room-view__composer"
+      [roomId]="r.id"
+      (messageSent)="onMessageSent($event)"
+    />
   } @else if (loadError()) {
     <div class="room-view__error bg-error-container text-on-error-container p-4 m-5 gap-3">
       <mat-icon>error_outline</mat-icon>

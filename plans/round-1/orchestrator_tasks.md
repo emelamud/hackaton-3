@@ -38,4 +38,4 @@ Express conventions, Drizzle patterns, route vs service separation, error handli
 Angular folder structure, auth flow, form conventions, routing conventions.
 
 ## Wrap-up
-Write `plans/round-1/summary-orchestrator.md` with Built / Deviations / Deferred / Next round needs to know.
+Write `plans/round-1/orchestrator_work_summary.md` with Built / Deviations / Deferred / Next round needs to know.

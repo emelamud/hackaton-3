@@ -20,6 +20,15 @@ declare global {
   }
 }
 
+/**
+ * Shared JWT-verify step used by both HTTP `requireAuth` and Socket.io `io.use()`.
+ * Throws the underlying `jsonwebtoken` error on failure — callers wrap into their
+ * transport-specific error shape (AppError for HTTP, Error('Unauthorized') for WS).
+ */
+export function verifyAccessToken(token: string): AuthPayload {
+  return jwt.verify(token, config.jwtSecret) as AuthPayload;
+}
+
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -29,8 +38,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
 
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, config.jwtSecret) as AuthPayload;
-    req.user = payload;
+    req.user = verifyAccessToken(token);
     next();
   } catch {
     next(new AppError('Invalid or expired access token', 401));

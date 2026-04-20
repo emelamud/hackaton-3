@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  index,
   pgEnum,
   pgTable,
   primaryKey,
@@ -66,6 +67,26 @@ export const roomMembers = pgTable(
   }),
 );
 
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Needed for ORDER BY created_at history queries; Round 5 cursor pagination
+    // will rely on this compound index.
+    roomCreatedIdx: index('messages_room_created_idx').on(table.roomId, table.createdAt),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
@@ -74,3 +95,5 @@ export type RoomRow = typeof rooms.$inferSelect;
 export type NewRoomRow = typeof rooms.$inferInsert;
 export type RoomMemberRow = typeof roomMembers.$inferSelect;
 export type NewRoomMemberRow = typeof roomMembers.$inferInsert;
+export type MessageRow = typeof messages.$inferSelect;
+export type NewMessageRow = typeof messages.$inferInsert;

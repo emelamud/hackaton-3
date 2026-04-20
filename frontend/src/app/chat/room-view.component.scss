@@ -16,8 +16,6 @@
 
 .room-view__header {
   flex-shrink: 0;
-  border-bottom-width: 0.0625rem;
-  border-bottom-style: solid;
 }
 
 .room-view__title-row {
@@ -33,27 +31,16 @@
 }
 
 .room-view__messages {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 1 auto;
   min-height: 0;
-}
-
-.room-view__placeholder {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border-width: 0.0625rem;
-  border-style: dashed;
-  border-radius: 0.75rem;
-  min-height: 16rem;
+  overflow: hidden;
 }
 
-.room-view__placeholder-icon {
-  font-size: 3rem;
-  width: 3rem;
-  height: 3rem;
+.room-view__composer {
+  flex: 0 0 auto;
 }
 
 .room-view__error {

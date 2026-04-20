@@ -1,0 +1,42 @@
+<form
+  [formGroup]="form"
+  (ngSubmit)="onSubmit()"
+  novalidate
+  class="composer gap-2 p-3 bg-surface-container-low border-t-outline-variant"
+>
+  <mat-form-field appearance="outline" class="composer__field">
+    <mat-label>Message</mat-label>
+    <textarea
+      #textarea
+      matInput
+      cdkTextareaAutosize
+      #autosize="cdkTextareaAutosize"
+      cdkAutosizeMinRows="1"
+      cdkAutosizeMaxRows="8"
+      formControlName="body"
+      maxlength="3072"
+      (keydown)="onKeydown($event)"
+      placeholder="Write a message — Enter to send, Shift+Enter for a new line"
+    ></textarea>
+    @if (serverError()) {
+      <mat-error>{{ serverError() }}</mat-error>
+    } @else if (form.controls.body.hasError('maxlength') && form.controls.body.touched) {
+      <mat-error>Message must be at most 3072 characters</mat-error>
+    }
+  </mat-form-field>
+
+  <button
+    mat-icon-button
+    color="primary"
+    type="submit"
+    class="composer__send"
+    [disabled]="submitting()"
+    aria-label="Send message"
+  >
+    @if (submitting()) {
+      <mat-progress-spinner diameter="20" mode="indeterminate" />
+    } @else {
+      <mat-icon>send</mat-icon>
+    }
+  </button>
+</form>

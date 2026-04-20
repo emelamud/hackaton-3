@@ -1,0 +1,32 @@
+@if (loading()) {
+  <div class="message-list__state gap-3 p-5">
+    <mat-progress-spinner diameter="24" mode="indeterminate" />
+    <span class="text-body-medium text-on-surface-variant">Loading messages…</span>
+  </div>
+} @else if (loadError()) {
+  <div class="message-list__state bg-error-container text-on-error-container p-4 m-5 gap-2">
+    <mat-icon>error_outline</mat-icon>
+    <span class="text-body-medium">Unable to load messages.</span>
+  </div>
+} @else {
+  <div #scrollContainer class="message-list__scroll px-5 py-4">
+    @if (messages().length === 0) {
+      <div class="message-list__empty text-on-surface-variant gap-2 p-5">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span class="text-body-medium">No messages yet. Say hi!</span>
+      </div>
+    } @else {
+      @for (m of messages(); track trackById($index, m)) {
+        <article class="message-list__row gap-1 py-2">
+          <header class="message-list__meta gap-2">
+            <span class="text-title-small text-primary">{{ m.username }}</span>
+            <time class="text-label-small text-on-surface-variant">
+              {{ m.createdAt | date: 'shortTime' }}
+            </time>
+          </header>
+          <p class="message-list__body text-body-medium m-0">{{ m.body }}</p>
+        </article>
+      }
+    }
+  </div>
+}

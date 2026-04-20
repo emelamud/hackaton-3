@@ -96,7 +96,7 @@ Before writing the summary: run `docker compose up`, hit the endpoints via `curl
 7. User A `POST /api/rooms/:id/leave` — expect 403 (owner)
 
 ## Wrap-up
-Write `plans/round-2/summary-backend.md` with:
+Write `plans/round-2/backend_work_summary.md` with:
 - **Built** — DB tables, migration filename, endpoints, service functions
 - **Deviations** — anything that differs from `shared/api-contract.md` (and why)
 - **Deferred** — anything skipped (e.g. admin promotion — that's Round 5a)

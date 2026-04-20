@@ -97,7 +97,7 @@ Use `MatToolbar`, `MatMenu` for profile dropdown. Shell is the layout for all au
 - Redirect unauthenticated deep links back after login (store `returnUrl` in router state)
 
 ## Wrap-up
-Write `plans/round-1/summary-frontend.md` with:
+Write `plans/round-1/frontend_work_summary.md` with:
 - **Built**: list of pages/components implemented
 - **Deviations**: anything that differs from the task or contract
 - **Deferred**: items skipped

@@ -68,7 +68,7 @@ UPLOADS_DIR=/app/uploads
 ```
 
 ## Wrap-up
-Write `plans/round-1/summary-backend.md` with:
+Write `plans/round-1/backend_work_summary.md` with:
 - **Built**: list of endpoints and DB tables created
 - **Deviations**: anything that differs from the contract
 - **Deferred**: anything skipped

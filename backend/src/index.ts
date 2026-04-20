@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -7,13 +8,16 @@ import { authRouter } from './routes/auth';
 import { sessionsRouter } from './routes/sessions';
 import { roomsRouter } from './routes/rooms';
 import { errorHandler } from './middleware/errorHandler';
+import { initSocketIo } from './socket/io';
 import { config } from './config';
 
 const app = express();
 
+const CORS_ORIGIN = 'http://localhost:4300';
+
 app.use(
   cors({
-    origin: 'http://localhost:4300',
+    origin: CORS_ORIGIN,
     credentials: true,
   }),
 );
@@ -27,6 +31,9 @@ app.use('/api/rooms', roomsRouter);
 
 app.use(errorHandler);
 
-app.listen(config.port, () => {
+const httpServer = http.createServer(app);
+initSocketIo(httpServer, CORS_ORIGIN);
+
+httpServer.listen(config.port, () => {
   console.log(`Backend running on port ${config.port}`);
 });

@@ -160,6 +160,7 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 | GET | `/api/rooms/:id` | — | `200 RoomDetail` | `403` not a member, `404` not found |
 | POST | `/api/rooms/:id/join` | — | `200 RoomDetail` (idempotent if already member) | `403` private room, `404` not found |
 | POST | `/api/rooms/:id/leave` | — | `204` | `403` owner cannot leave, `404` not a member |
+| GET | `/api/rooms/:id/messages` | — | `200 Message[]` (oldest first, up to 50 most-recent) | `403` not a member, `404` not found |
 
 ---
 
@@ -243,3 +244,95 @@ Leave a room. The owner cannot leave their own room (requirement §2.4.5) — th
 **Errors**:
 - `403` — caller is the owner: `{ "error": "Owner cannot leave their own room" }`
 - `404` — caller is not a member of this room: `{ "error": "Room not found" }`
+
+---
+
+### GET `/api/rooms/:id/messages`
+Return up to the 50 most-recent messages in a room, ordered by `createdAt` **ascending** (oldest first, newest last) so clients can append directly to their scrollable list. Caller must be a member.
+
+**Success** `200` — `Message[]`:
+```json
+[
+  {
+    "id": "uuid",
+    "roomId": "uuid",
+    "userId": "uuid",
+    "username": "alice",
+    "body": "hello team",
+    "createdAt": "ISO"
+  }
+]
+```
+
+**Errors**:
+- `403` — caller is not a member: `{ "error": "Not a room member" }`
+- `404` — room not found: `{ "error": "Room not found" }`
+
+No cursor / `before` parameter in Round 3. Round 5 introduces `?before=<messageId>&limit=` and keeps the same response shape.
+
+---
+
+## Socket Events
+
+Socket.io v4 channel for real-time messaging. Runs on the same HTTP server as Express.
+
+### Transport
+- Path: default `/socket.io/`.
+- Dev: client connects to `http://localhost:3000`. Prod: same origin (frontend nginx proxies `/socket.io/` to backend with WebSocket upgrade headers).
+- Server CORS: `origin: http://localhost:4300`, `credentials: true` (parity with the REST CORS config).
+
+### Handshake
+- Client provides `auth: { token: <accessToken> }` in `io(url, options)` — the same JWT access token used for `Authorization: Bearer` on REST calls.
+- Server middleware (`io.use`) verifies the token with the same `verifyAccessToken()` helper that backs `requireAuth`. On failure: `next(new Error('Unauthorized'))` — the client surfaces this via `connect_error`.
+- On success the server attaches `socket.data.user = { id, email, username }` (same `AuthPayload` shape as HTTP).
+
+### On connect
+Subscription state is **maintained server-side** — the client does not send `room:join` / `room:leave` events in Round 3. On each successful `connection`:
+
+1. Server joins the socket to `user:<userId>` (used by REST handlers to fan out to all of a user's tabs).
+2. Server joins the socket to `room:<roomId>` for every room the user is currently a member of.
+
+REST handlers keep subscriptions in sync for the lifetime of the connection:
+- After `POST /api/rooms` (create) and `POST /api/rooms/:id/join` → server calls `io.in('user:<userId>').socketsJoin('room:<roomId>')`.
+- After `POST /api/rooms/:id/leave` → server calls `io.in('user:<userId>').socketsLeave('room:<roomId>')`.
+
+Clients do **not** need to reconnect or re-subscribe when they create/join/leave rooms during a session.
+
+### Client → Server events
+
+#### `message:send`
+- Payload (`SendMessagePayload`):
+  ```json
+  { "roomId": "uuid", "body": "hello team" }
+  ```
+- **An ack callback is required** — the server always invokes it.
+- Validation:
+  - `body` is a string; trimmed length must be 1–3072 characters (requirement §2.5.2 — 3 KB max).
+  - `roomId` is a UUID.
+  - Caller must be a member of the room.
+- Ack (`MessageSendAck`):
+  - Success:
+    ```json
+    { "ok": true, "message": { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "alice", "body": "hello team", "createdAt": "ISO" } }
+    ```
+  - Failure (specific strings — must match verbatim so clients can assert on them):
+    - `{ "ok": false, "error": "Body must be between 1 and 3072 characters" }`
+    - `{ "ok": false, "error": "Not a room member" }`
+    - `{ "ok": false, "error": "Room not found" }`
+    - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields
+- On success the server additionally broadcasts `message:new` (see below) to everyone in `room:<roomId>` **except the sender socket**. The sender renders its own message from the ack, so the broadcast excludes it to avoid duplicates. Other tabs of the same user receive the broadcast normally (different sockets, same user).
+
+### Server → Client events
+
+#### `message:new`
+- Payload: `Message` (fully denormalised, including `username`).
+  ```json
+  { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "bob", "body": "hey", "createdAt": "ISO" }
+  ```
+- Fired to all sockets in `room:<roomId>` **except the sender socket** (`socket.to('room:<roomId>').emit(...)`). Clients are subscribed to every room they belong to, so they must filter by `roomId` when deciding which room's pane to render into.
+
+### Error envelope
+Connection-level failures (auth, transport) surface via socket.io's built-in `connect_error` event — the client should log and toast. Business-logic failures on `message:send` come through the ack envelope above. There is no generic `error:*` server event in Round 3.
+
+### Token refresh
+A long-lived socket keeps its original handshake token until disconnect — it does **not** re-authenticate mid-session. HTTP token refresh during a live session does not affect existing sockets. If stricter session enforcement is needed later, the client would need to reconnect with the rotated token.

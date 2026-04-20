@@ -112,11 +112,13 @@
 
 ## Round Summary Convention
 
-After every round, each agent writes `plans/round-N/summary-<role>.md`:
+After every round, each agent writes `plans/round-N/<role>_work_summary.md` (e.g. `backend_work_summary.md`):
 - **Built**: bullet list of what was actually implemented
 - **Deviations**: anything that differs from the task description or API contract
 - **Deferred**: items skipped or left incomplete
 - **Next round needs to know**: decisions that affect Round N+1
 - **Config improvements**: proposed follow-up changes to settings / tooling / agent configs
+
+Per-round task files live next to the summaries as `plans/round-N/<role>_tasks.md` (`orchestrator_tasks.md`, `backend_tasks.md`, `frontend_tasks.md`).
 
 Summaries become input context when expanding the next round's detailed task files.

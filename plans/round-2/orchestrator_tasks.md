@@ -58,7 +58,7 @@ Document in prose under the table:
 Leave `plans/master-plan.md` unchanged. Round 2a scope is frozen; 2b/2c remain as-is.
 
 ## Wrap-up
-Write `plans/round-2/summary-orchestrator.md` with:
+Write `plans/round-2/orchestrator_work_summary.md` with:
 - **Built** — files touched under `/shared/` and the final endpoint list
 - **Deviations** — any shape changes made after BE/FE feedback
 - **Deferred** — anything from master plan Round 2 that slipped

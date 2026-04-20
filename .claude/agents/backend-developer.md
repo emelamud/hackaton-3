@@ -32,4 +32,4 @@ Do not modify files in `/shared/`. If a contract or type change is needed, repor
 - Write integration tests for all endpoints using Jest and Supertest
 
 ## Round workflow
-When implementing a round's tasks, always end by writing `plans/round-N/summary-backend.md` with sections: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**.
+When implementing a round's tasks, always end by writing `plans/round-N/backend_work_summary.md` with sections: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**.

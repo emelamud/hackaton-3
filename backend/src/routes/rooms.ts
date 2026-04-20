@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { validate, validateParams } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
 import * as roomsService from '../services/rooms.service';
+import * as messagesService from '../services/messages.service';
+import { getIo } from '../socket/io';
 
 export const roomsRouter = Router();
 
@@ -38,6 +40,9 @@ roomsRouter.post(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await roomsService.createRoom(req.user!.id, req.body);
+      // Nudge all of this user's live sockets into the new room's channel
+      // so they receive `message:new` without reconnecting.
+      getIo().in(`user:${req.user!.id}`).socketsJoin(`room:${result.id}`);
       res.status(201).json(result);
     } catch (err) {
       next(err);
@@ -59,6 +64,23 @@ roomsRouter.get(
   },
 );
 
+// GET /api/rooms/:id/messages
+roomsRouter.get(
+  '/:id/messages',
+  validateParams(idSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await messagesService.listRecentMessages(
+        req.user!.id,
+        req.params.id,
+      );
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /api/rooms/:id/join
 roomsRouter.post(
   '/:id/join',
@@ -66,6 +88,7 @@ roomsRouter.post(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await roomsService.joinRoom(req.user!.id, req.params.id);
+      getIo().in(`user:${req.user!.id}`).socketsJoin(`room:${result.id}`);
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -80,6 +103,7 @@ roomsRouter.post(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       await roomsService.leaveRoom(req.user!.id, req.params.id);
+      getIo().in(`user:${req.user!.id}`).socketsLeave(`room:${req.params.id}`);
       res.status(204).send();
     } catch (err) {
       next(err);
