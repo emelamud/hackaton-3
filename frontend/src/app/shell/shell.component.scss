@@ -1,0 +1,103 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.shell__topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.shell__logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.shell__logo-icon {
+  font-size: 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.shell__nav {
+  display: flex;
+  align-items: center;
+}
+
+.shell__spacer {
+  flex: 1;
+}
+
+.shell__actions {
+  display: flex;
+  align-items: center;
+}
+
+.shell__profile-btn {
+  gap: 0.5rem;
+  white-space: nowrap;
+  padding-inline: 0.75rem;
+}
+
+
+.shell__profile-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.shell__avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.profile-menu-header {
+  pointer-events: none;
+}
+
+.shell__content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+// Mobile: collapse nav labels
+@media (max-width: 56.5rem) {
+  .shell__nav {
+    a span {
+      display: none;
+    }
+  }
+
+  .shell__logo span:not(.shell__logo-icon) {
+    display: none;
+  }
+}
+
+@media (max-width: 37.5rem) {
+  .shell__nav {
+    display: none;
+  }
+}

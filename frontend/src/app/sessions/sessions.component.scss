@@ -1,0 +1,80 @@
+@use 'sass:map';
+@use 'styles/tokens' as tokens;
+
+.sessions {
+  max-width: 64rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.sessions__header {
+  padding-bottom: 1rem;
+}
+
+.sessions__loading,
+.sessions__error,
+.sessions__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sessions__loading {
+  gap: 0.75rem;
+  padding: 3rem;
+}
+
+.sessions__error {
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sessions__empty {
+  flex-direction: column;
+  padding: 4rem;
+  text-align: center;
+
+  mat-icon {
+    font-size: 3rem;
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+.sessions__table-wrapper {
+  overflow-x: auto;
+}
+
+.sessions__table {
+  width: 100%;
+}
+
+.sessions__row--current {
+  background-color: map.get(tokens.$ds-colors, surface-container-lowest);
+}
+
+.client-cell {
+  display: flex;
+  align-items: center;
+}
+
+.current-badge {
+  border-radius: 1rem;
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+}
+
+.revoke-btn {
+  white-space: nowrap;
+
+  mat-progress-spinner {
+    display: inline-block;
+  }
+}
+
+@media (max-width: 56.5rem) {
+  .sessions {
+    padding: 1rem;
+  }
+}

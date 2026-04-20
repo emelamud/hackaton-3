@@ -1,0 +1,71 @@
+<div class="shell bg-background">
+  <!-- Top navigation bar -->
+  <mat-toolbar class="shell__topbar bg-surface-container-high border-outline-variant">
+    <!-- Left: Logo -->
+    <span class="shell__logo text-title-large text-on-surface">
+      <mat-icon class="shell__logo-icon">chat</mat-icon>
+      ChatApp
+    </span>
+
+    <!-- Center: Nav links -->
+    <nav class="shell__nav gap-2">
+      <a mat-button routerLink="/chat">
+        <mat-icon>public</mat-icon>
+        Public Rooms
+      </a>
+      <a mat-button>
+        <mat-icon>lock</mat-icon>
+        Private Rooms
+      </a>
+      <a mat-button>
+        <mat-icon>people</mat-icon>
+        Contacts
+      </a>
+    </nav>
+
+    <span class="shell__spacer"></span>
+
+    <!-- Right: Sessions, Profile, Sign out -->
+    <div class="shell__actions gap-2">
+      <a mat-button routerLink="/sessions">
+        <mat-icon>devices</mat-icon>
+        Sessions
+      </a>
+
+      <!-- Profile dropdown -->
+      <button mat-button [matMenuTriggerFor]="profileMenu" class="shell__profile-btn">
+        <div class="shell__profile-wrapper">
+          <span class="shell__avatar bg-primary text-on-primary text-label-large">
+            {{ authService.currentUser()?.username?.[0]?.toUpperCase() ?? 'U' }}
+          </span>
+          <span class="text-body-medium">{{ authService.currentUser()?.username }}</span>
+          <mat-icon>arrow_drop_down</mat-icon>
+        </div>
+      </button>
+
+      <mat-menu #profileMenu="matMenu">
+        <div class="profile-menu-header px-4 py-3">
+          <div class="text-title-small">{{ authService.currentUser()?.username }}</div>
+          <div class="text-body-small text-on-surface-variant">
+            {{ authService.currentUser()?.email }}
+          </div>
+        </div>
+        <mat-divider />
+        <button mat-menu-item (click)="signOut()" [disabled]="signingOut()">
+          <mat-icon>logout</mat-icon>
+          <span>Sign out</span>
+        </button>
+      </mat-menu>
+
+      <!-- Quick sign out button -->
+      <button mat-icon-button (click)="signOut()" [disabled]="signingOut()" aria-label="Sign out">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </div>
+  </mat-toolbar>
+
+  <!-- Page content -->
+  <main class="shell__content bg-surface">
+    <router-outlet />
+  </main>
+</div>
