@@ -38,16 +38,7 @@
 
 ---
 
-### Round 5: Message History + Pagination
-**Deliverable**: User can scroll up through full message history with smooth infinite scroll; unread/anchor behavior feels right.
-
-- **[Orchestrator]** Paginated history API contract (`GET /rooms/:id/messages?before=&limit=`); `MessageHistoryResponse` type
-- **[BE]** Cursor-paginated history endpoint; order + index optimization on `messages(room_id, created_at)`
-- **[FE]** Infinite scroll on the message list (load more on scroll-to-top); preserve scroll anchor when prepending; initial scroll to bottom on room open
-
----
-
-### Round 6: Friends
+### Round 5: Friends
 **Deliverable**: Users can send, accept, and reject friend requests, and see a friends list in the sidebar.
 
 - **[Orchestrator]** `Friend`, `FriendRequest` types; friend API contract
@@ -56,7 +47,7 @@
 
 ---
 
-### Round 7: Direct Messages
+### Round 6: Direct Messages
 **Deliverable**: From the friends list, users can open a 1:1 DM and exchange messages in real time (reuses Round 3 message infra).
 
 - **[Orchestrator]** Extend room types with `type: 'public' | 'dm'`; `OpenDmRequest` contract
@@ -65,7 +56,7 @@
 
 ---
 
-### Round 8: Presence
+### Round 7: Presence
 **Deliverable**: Users see online / AFK / offline dots next to friends and DM participants; state is consistent across tabs.
 
 - **[Orchestrator]** `PresenceState` type; presence socket event contract (`presence:update`, `presence:snapshot`)
@@ -74,12 +65,21 @@
 
 ---
 
-### Round 9: Attachments
+### Round 8: Attachments
 **Deliverable**: Users can attach files/images to messages; recipients see inline image previews.
 
 - **[Orchestrator]** `Attachment` type; file upload API contract; message type extended with `attachments?: Attachment[]`
 - **[BE]** `multer` file upload endpoint (size + mime whitelist); file serving with per-message access control; `attachments` table
 - **[FE]** Attach button + drag-and-drop + paste handler in composer; inline image preview in messages; fallback file card for non-images
+
+---
+
+### Round 9: Message History + Pagination
+**Deliverable**: User can scroll up through full message history with smooth infinite scroll; unread/anchor behavior feels right.
+
+- **[Orchestrator]** Paginated history API contract (`GET /rooms/:id/messages?before=&limit=`); `MessageHistoryResponse` type
+- **[BE]** Cursor-paginated history endpoint; order + index optimization on `messages(room_id, created_at)`
+- **[FE]** Infinite scroll on the message list (load more on scroll-to-top); preserve scroll anchor when prepending; initial scroll to bottom on room open
 
 ---
 

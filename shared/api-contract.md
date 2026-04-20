@@ -148,7 +148,8 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 ### Rules
 - Room `name` must be unique across the whole system (requirement §2.4.2). Comparison is case-insensitive; the original casing is stored and returned.
 - Validation bounds: `name` 3–64 chars (trimmed), `description` 0–500 chars (trimmed, optional), `visibility` must be `"public"` or `"private"`.
-- `POST /api/rooms/:id/join` on a private room returns `403` for Round 2a. Invitations come in Round 5b.
+- `POST /api/rooms/:id/join` on a private room returns `403` — private rooms are only reachable via invitations (see §Invitation Endpoints below).
+- `PATCH /api/rooms/:id` requires `role in ('owner', 'admin')`. Admin promotion lands in a later moderation round, so in practice only owners qualify today.
 - Members in `RoomDetail.members` are ordered: owner first, then admins by `joinedAt` ascending, then regular members by `joinedAt` ascending.
 
 ### Summary
@@ -161,6 +162,7 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 | POST | `/api/rooms/:id/join` | — | `200 RoomDetail` (idempotent if already member) | `403` private room, `404` not found |
 | POST | `/api/rooms/:id/leave` | — | `204` | `403` owner cannot leave, `404` not a member |
 | GET | `/api/rooms/:id/messages` | — | `200 Message[]` (oldest first, up to 50 most-recent) | `403` not a member, `404` not found |
+| PATCH | `/api/rooms/:id` | `PatchRoomRequest` | `200 RoomDetail` + `room:updated` broadcast | `400` empty body / validation, `403` not owner/admin, `404` not found, `409` name taken |
 
 ---
 
@@ -272,6 +274,131 @@ No cursor / `before` parameter in Round 3. Round 5 introduces `?before=<messageI
 
 ---
 
+### PATCH `/api/rooms/:id`
+Edit a room's `name`, `description`, and/or `visibility`. Caller must be a member with `role in ('owner', 'admin')`.
+
+**Request body** (`PatchRoomRequest`):
+```json
+{ "name": "engineering-core", "description": "Updated focus", "visibility": "private" }
+```
+
+All fields optional; at least one must be present. `description: null` clears the field; omitting a key leaves it unchanged.
+
+**Success** `200` — `RoomDetail` with the updated values. Server also emits `room:updated` to `room:<id>` carrying the same `RoomDetail` (see §Socket Events).
+
+**Errors**:
+- `400` — empty body: `{ "error": "At least one field is required" }`
+- `400` — validation error on a present field: `{ "error": "...", "details": [...] }`
+- `403` — caller is a non-owner/non-admin member: `{ "error": "Only room owners and admins can edit room settings" }`
+- `404` — room not found or caller is not a member: `{ "error": "Room not found" }`
+- `409` — another room already has the requested name (case-insensitive): `{ "error": "Room name already taken" }`
+
+Renaming to the current name (possibly in different casing) is a no-op, not a 409.
+
+**Visibility change semantics**: `public → private` keeps existing members; `private → public` opens the room to future catalog / joins. No auto-kick, no membership rewrite.
+
+---
+
+## Invitation Endpoints
+
+All invitation endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Invitations exist only for **private** rooms (requirement §2.4.9). Creating an invitation against a public room returns `400`.
+- Any current **member** of a private room may create an invitation.
+- An invitation is unique per `(roomId, invitedUserId)` — creating a second one while a pending one exists returns `409`.
+- Only the invitee may `accept` or `reject` an invitation.
+- Only the original inviter may `revoke` (via DELETE) an invitation. (A later moderation round extends this to room admins.)
+- `accept` is **idempotent** if the invitee is already a member: the invitation is deleted, no new membership row is inserted, and the response still contains the current `RoomDetail`. No `409` returned.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| POST | `/api/rooms/:id/invitations` | `CreateInvitationRequest` | `201 Invitation` + `invitation:new` emitted to invitee | `400` public room / validation, `403` caller not a room member, `404` room or user not found, `409` duplicate pending or already member |
+| GET | `/api/invitations` | — | `200 Invitation[]` (caller's pending invitations, newest first) | — |
+| POST | `/api/invitations/:id/accept` | — | `200 RoomDetail` + `room:updated` broadcast + caller's sockets joined to `room:<id>` | `403` not the invitee, `404` invitation not found |
+| POST | `/api/invitations/:id/reject` | — | `204` | `403` not the invitee, `404` invitation not found |
+| DELETE | `/api/invitations/:id` | — | `204` + `invitation:revoked` emitted to invitee | `403` not the inviter, `404` invitation not found |
+
+---
+
+### POST `/api/rooms/:id/invitations`
+Create an invitation to a private room.
+
+**Request body** (`CreateInvitationRequest`):
+```json
+{ "username": "bob" }
+```
+
+**Success** `201` — `Invitation`:
+```json
+{
+  "id": "uuid",
+  "roomId": "uuid",
+  "roomName": "engineering-core",
+  "invitedUserId": "uuid",
+  "invitedByUserId": "uuid",
+  "invitedByUsername": "alice",
+  "createdAt": "ISO"
+}
+```
+
+Server also emits `invitation:new` with the same payload to `user:<invitedUserId>`.
+
+**Errors**:
+- `400` — target room is public: `{ "error": "Invitations are only for private rooms" }`
+- `400` — validation error: `{ "error": "...", "details": [...] }`
+- `403` — caller is not a member of the room: `{ "error": "Forbidden" }`
+- `404` — room not found: `{ "error": "Room not found" }`
+- `404` — target username does not exist: `{ "error": "User not found" }`
+- `409` — invitee is already a member: `{ "error": "User is already a member of this room" }`
+- `409` — a pending invitation already exists for this invitee in this room: `{ "error": "An invitation is already pending for this user" }`
+
+---
+
+### GET `/api/invitations`
+List the caller's pending invitations (where caller is the invitee), ordered by `createdAt` descending.
+
+**Success** `200` — `Invitation[]` (same shape as POST response body, in array form).
+
+---
+
+### POST `/api/invitations/:id/accept`
+Accept an invitation. Creates the `room_members` row, deletes the invitation, subscribes the caller's sockets to `room:<id>`, and broadcasts `room:updated` (with the fresh `RoomDetail`) to `room:<id>`.
+
+**Success** `200` — `RoomDetail` (shape identical to `GET /api/rooms/:id`).
+
+**Errors**:
+- `403` — caller is not the invitee: `{ "error": "Forbidden" }`
+- `404` — invitation not found: `{ "error": "Invitation not found" }`
+
+Idempotent against a caller who somehow became a member by another path before accepting: the invitation is deleted, no new `room_members` row is inserted, and the response still carries `RoomDetail`.
+
+---
+
+### POST `/api/invitations/:id/reject`
+Reject an invitation. Deletes the row silently — the inviter is **not** notified in Round 4.
+
+**Success** `204`.
+
+**Errors**:
+- `403` — caller is not the invitee: `{ "error": "Forbidden" }`
+- `404` — invitation not found: `{ "error": "Invitation not found" }`
+
+---
+
+### DELETE `/api/invitations/:id`
+Revoke an invitation. Deletes the row and emits `invitation:revoked` to `user:<invitedUserId>` so the invitee's UI drops the notification. Only the original inviter may revoke in Round 4.
+
+**Success** `204`.
+
+**Errors**:
+- `403` — caller is not the inviter: `{ "error": "Forbidden" }`
+- `404` — invitation not found: `{ "error": "Invitation not found" }`
+
+---
+
 ## Socket Events
 
 Socket.io v4 channel for real-time messaging. Runs on the same HTTP server as Express.
@@ -295,6 +422,7 @@ Subscription state is **maintained server-side** — the client does not send `r
 REST handlers keep subscriptions in sync for the lifetime of the connection:
 - After `POST /api/rooms` (create) and `POST /api/rooms/:id/join` → server calls `io.in('user:<userId>').socketsJoin('room:<roomId>')`.
 - After `POST /api/rooms/:id/leave` → server calls `io.in('user:<userId>').socketsLeave('room:<roomId>')`.
+- After `POST /api/invitations/:id/accept` → server calls `io.in('user:<accepterUserId>').socketsJoin('room:<roomId>')` **before** emitting the `room:updated` broadcast, so the accepter's tabs receive the same event every other member does.
 
 Clients do **not** need to reconnect or re-subscribe when they create/join/leave rooms during a session.
 
@@ -330,6 +458,28 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
   { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "bob", "body": "hey", "createdAt": "ISO" }
   ```
 - Fired to all sockets in `room:<roomId>` **except the sender socket** (`socket.to('room:<roomId>').emit(...)`). Clients are subscribed to every room they belong to, so they must filter by `roomId` when deciding which room's pane to render into.
+
+#### `invitation:new`
+- Payload: `Invitation` (fully denormalised — includes `roomName` and `invitedByUsername`).
+  ```json
+  { "id": "uuid", "roomId": "uuid", "roomName": "engineering-core", "invitedUserId": "uuid", "invitedByUserId": "uuid", "invitedByUsername": "alice", "createdAt": "ISO" }
+  ```
+- Fired to `user:<invitedUserId>` after `POST /api/rooms/:id/invitations` succeeds. The invitee's tabs render a notification. The inviter does **not** receive a self-broadcast.
+
+#### `invitation:revoked`
+- Payload: `InvitationRevokedPayload`.
+  ```json
+  { "invitationId": "uuid", "roomId": "uuid" }
+  ```
+- Fired to `user:<invitedUserId>` after `DELETE /api/invitations/:id` succeeds. The invitee's UI drops the notification.
+- **Not** fired on `accept` / `reject` — those are invitee-driven, the invitee already knows.
+
+#### `room:updated`
+- Payload: full `RoomDetail` (identical shape to `GET /api/rooms/:id`).
+- Fired to `room:<roomId>` after:
+  - `PATCH /api/rooms/:id` (any field changed).
+  - `POST /api/invitations/:id/accept` (new member in `members`, `memberCount` bumped).
+- **Not** fired on `POST /api/rooms/:id/join` or `POST /api/rooms/:id/leave` in Round 4 — those events are deferred polish. Existing members reload to see count changes until a later round retrofits member-change broadcasts.
 
 ### Error envelope
 Connection-level failures (auth, transport) surface via socket.io's built-in `connect_error` event — the client should log and toast. Business-logic failures on `message:send` come through the ack envelope above. There is no generic `error:*` server event in Round 3.

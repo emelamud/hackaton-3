@@ -35,20 +35,20 @@
     </div>
 
     <div class="room-rail__actions px-4 gap-2">
+      @if (r.visibility === 'private') {
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="openManageDialog('invitations')"
+        >
+          <mat-icon>person_add</mat-icon>
+          Invite user
+        </button>
+      }
       <button
         mat-stroked-button
         type="button"
-        disabled
-        matTooltip="Invitations arrive in a later round"
-      >
-        <mat-icon>person_add</mat-icon>
-        Invite user
-      </button>
-      <button
-        mat-stroked-button
-        type="button"
-        disabled
-        matTooltip="Room management arrives in a later round"
+        (click)="openManageDialog('settings')"
       >
         <mat-icon>settings</mat-icon>
         Manage room

@@ -16,6 +16,16 @@ const createRoomSchema = z.object({
   visibility: z.enum(['public', 'private']),
 });
 
+// Empty-body detection is intentionally deferred to the service layer so the
+// 400 response carries the contract-exact `"At least one field is required"`
+// message rather than the generic `"Validation failed" + details` envelope
+// produced by the zod `validate` middleware.
+const patchRoomSchema = z.object({
+  name: z.string().trim().min(3).max(64).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+});
+
 const idSchema = z.object({
   id: z.string().uuid(),
 });
@@ -105,6 +115,22 @@ roomsRouter.post(
       await roomsService.leaveRoom(req.user!.id, req.params.id);
       getIo().in(`user:${req.user!.id}`).socketsLeave(`room:${req.params.id}`);
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// PATCH /api/rooms/:id
+roomsRouter.patch(
+  '/:id',
+  validateParams(idSchema),
+  validate(patchRoomSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const detail = await roomsService.patchRoom(req.user!.id, req.params.id, req.body);
+      getIo().in(`room:${detail.id}`).emit('room:updated', detail);
+      res.status(200).json(detail);
     } catch (err) {
       next(err);
     }

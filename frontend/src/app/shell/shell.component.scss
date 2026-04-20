@@ -45,6 +45,27 @@
   align-items: center;
 }
 
+.shell__invitations-btn {
+  // mat-badge needs a little breathing room from neighbours
+  margin-right: 0.25rem;
+}
+
+.shell__invitations-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.shell__invitations-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 24rem;
+  overflow-y: auto;
+  min-width: 20rem;
+}
+
 .shell__profile-btn {
   gap: 0.5rem;
   white-space: nowrap;

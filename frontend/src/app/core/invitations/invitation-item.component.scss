@@ -1,0 +1,28 @@
+:host {
+  display: block;
+}
+
+.invitation-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.invitation-item__room {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.invitation-item__lock-icon {
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+.invitation-item__actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}

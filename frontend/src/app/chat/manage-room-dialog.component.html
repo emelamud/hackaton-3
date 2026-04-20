@@ -1,0 +1,201 @@
+<header class="manage-room-dialog__header px-5 pt-4 gap-2">
+  <h2 mat-dialog-title class="text-title-large m-0">
+    Manage room: <span class="manage-room-dialog__room-name">#{{ room().name }}</span>
+  </h2>
+  <button
+    mat-icon-button
+    type="button"
+    class="ml-auto"
+    aria-label="Close dialog"
+    (click)="close()"
+  >
+    <mat-icon>close</mat-icon>
+  </button>
+</header>
+
+<mat-dialog-content class="manage-room-dialog__content">
+  <mat-tab-group [selectedIndex]="initialTabIndex" animationDuration="0ms" mat-stretch-tabs="false">
+    <!-- Invitations tab -->
+    <mat-tab label="Invitations">
+      <div class="manage-room-dialog__tab-body p-5 gap-4">
+        @if (room().visibility === 'private') {
+          <p class="text-body-medium text-on-surface-variant m-0">
+            Invite a user by username. Any member of a private room can send invitations.
+          </p>
+
+          <form
+            [formGroup]="inviteForm"
+            (ngSubmit)="submitInvite()"
+            class="manage-room-dialog__invite-form gap-3"
+            novalidate
+          >
+            <mat-form-field appearance="outline" class="manage-room-dialog__username-field">
+              <mat-label>Username</mat-label>
+              <input
+                matInput
+                formControlName="username"
+                autocomplete="off"
+                placeholder="e.g. bob"
+                required
+              />
+              @if (inviteServerError()) {
+                <mat-error>{{ inviteServerError() }}</mat-error>
+              } @else if (
+                inviteForm.controls.username.hasError('required') &&
+                inviteForm.controls.username.touched
+              ) {
+                <mat-error>Username is required</mat-error>
+              }
+            </mat-form-field>
+
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+              [disabled]="inviteForm.invalid || inviteSubmitting()"
+            >
+              @if (inviteSubmitting()) {
+                <mat-progress-spinner diameter="20" mode="indeterminate" />
+              } @else {
+                Send invite
+              }
+            </button>
+          </form>
+
+          @if (inviteSuccessUsername(); as user) {
+            <div
+              class="manage-room-dialog__invite-success bg-tertiary-container text-on-tertiary-container p-3 gap-2"
+              role="status"
+            >
+              <mat-icon>check_circle</mat-icon>
+              <span class="text-body-medium">Invited &#64;{{ user }}</span>
+            </div>
+          }
+        } @else {
+          <div
+            class="manage-room-dialog__public-info bg-surface-container text-on-surface p-4 gap-3"
+          >
+            <mat-icon class="text-on-surface-variant">public</mat-icon>
+            <div>
+              <div class="text-title-small">Public room</div>
+              <p class="text-body-medium text-on-surface-variant m-0">
+                This room is public — no invitation needed. Anyone can join.
+              </p>
+            </div>
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- Settings tab -->
+    <mat-tab label="Settings">
+      <div class="manage-room-dialog__tab-body p-5 gap-4">
+        @if (!canEditSettings()) {
+          <div
+            class="manage-room-dialog__readonly-note bg-surface-container text-on-surface-variant p-3 gap-2"
+          >
+            <mat-icon>info</mat-icon>
+            <span class="text-body-medium">
+              Only the room's owner or admins can edit these settings.
+            </span>
+          </div>
+        }
+
+        <form
+          [formGroup]="settingsForm"
+          (ngSubmit)="submitSettings()"
+          class="manage-room-dialog__settings-form gap-4"
+          novalidate
+        >
+          <mat-form-field appearance="outline">
+            <mat-label>Name</mat-label>
+            <input
+              matInput
+              formControlName="name"
+              autocomplete="off"
+              maxlength="64"
+              required
+            />
+            <mat-hint align="end">{{ settingsForm.controls.name.value?.length ?? 0 }}/64</mat-hint>
+            @if (nameServerError()) {
+              <mat-error>{{ nameServerError() }}</mat-error>
+            } @else if (
+              settingsForm.controls.name.hasError('required') &&
+              settingsForm.controls.name.touched
+            ) {
+              <mat-error>Room name is required</mat-error>
+            } @else if (
+              settingsForm.controls.name.hasError('minlength') &&
+              settingsForm.controls.name.touched
+            ) {
+              <mat-error>Name must be at least 3 characters</mat-error>
+            } @else if (
+              settingsForm.controls.name.hasError('maxlength') &&
+              settingsForm.controls.name.touched
+            ) {
+              <mat-error>Name must be at most 64 characters</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Description</mat-label>
+            <textarea
+              matInput
+              formControlName="description"
+              maxlength="500"
+              rows="3"
+              placeholder="What is this room about?"
+            ></textarea>
+            <mat-hint align="end"
+              >{{ settingsForm.controls.description.value?.length ?? 0 }}/500</mat-hint
+            >
+          </mat-form-field>
+
+          <div class="gap-2">
+            <span
+              id="manage-visibility-label"
+              class="text-label-medium text-on-surface-variant"
+              >Visibility</span
+            >
+            <mat-radio-group
+              formControlName="visibility"
+              class="manage-room-dialog__visibility-group gap-4"
+              aria-labelledby="manage-visibility-label"
+            >
+              <mat-radio-button value="public">Public</mat-radio-button>
+              <mat-radio-button value="private">Private</mat-radio-button>
+            </mat-radio-group>
+          </div>
+
+          <div class="manage-room-dialog__settings-actions gap-2 mt-3">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="close()"
+              [disabled]="settingsSubmitting()"
+            >
+              Cancel
+            </button>
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+              [disabled]="
+                !canEditSettings() ||
+                settingsForm.invalid ||
+                !settingsForm.dirty ||
+                settingsSubmitting()
+              "
+            >
+              @if (settingsSubmitting()) {
+                <mat-progress-spinner diameter="20" mode="indeterminate" />
+              } @else {
+                Save changes
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</mat-dialog-content>

@@ -1,0 +1,33 @@
+<article class="invitation-item px-4 py-3 gap-2">
+  <div class="invitation-item__text text-body-medium">
+    <strong>{{ invitation.invitedByUsername }}</strong>
+    <span class="text-on-surface-variant"> invited you to </span>
+    <strong class="invitation-item__room">
+      <mat-icon class="invitation-item__lock-icon text-on-surface-variant">lock</mat-icon
+      >{{ invitation.roomName }}
+    </strong>
+  </div>
+  <time class="invitation-item__time text-label-small text-on-surface-variant">
+    {{ invitation.createdAt | date: 'medium' }}
+  </time>
+
+  <div class="invitation-item__actions gap-2">
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="busy"
+      (click)="onAccept($event)"
+    >
+      Accept
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="busy"
+      (click)="onReject($event)"
+    >
+      Reject
+    </button>
+  </div>
+</article>

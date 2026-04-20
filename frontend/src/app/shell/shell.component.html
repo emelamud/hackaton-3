@@ -25,8 +25,58 @@
 
     <span class="shell__spacer"></span>
 
-    <!-- Right: Sessions, Profile, Sign out -->
+    <!-- Right: Invitations, Sessions, Profile, Sign out -->
     <div class="shell__actions gap-2">
+      <!-- Invitations badge + dropdown -->
+      <button
+        mat-icon-button
+        type="button"
+        class="shell__invitations-btn"
+        [matMenuTriggerFor]="invitationsMenu"
+        #invitationsTrigger="matMenuTrigger"
+        [matBadge]="invitationsService.pendingCount()"
+        matBadgeColor="primary"
+        matBadgeSize="small"
+        matBadgeOverlap="true"
+        [matBadgeHidden]="invitationsService.pendingCount() === 0"
+        aria-label="Pending invitations"
+      >
+        <mat-icon>mail</mat-icon>
+      </button>
+
+      <mat-menu
+        #invitationsMenu="matMenu"
+        class="shell__invitations-menu"
+        xPosition="before"
+      >
+        <ng-template matMenuContent>
+          <header class="shell__invitations-header px-4 py-3">
+            <span class="text-title-small">Invitations</span>
+          </header>
+          <mat-divider />
+
+          @if (invitationsService.pending().length === 0) {
+            <div class="shell__invitations-empty px-4 py-5 gap-2">
+              <mat-icon class="text-on-surface-variant">mail_outline</mat-icon>
+              <p class="text-body-medium text-on-surface-variant m-0">
+                No pending invitations
+              </p>
+            </div>
+          } @else {
+            <div class="shell__invitations-list">
+              @for (invitation of invitationsService.pending(); track invitation.id) {
+                <app-invitation-item
+                  [invitation]="invitation"
+                  [busy]="isBusy(invitation.id)"
+                  (accept)="onAccept($event, invitationsTrigger)"
+                  (reject)="onReject($event, invitationsTrigger)"
+                />
+              }
+            </div>
+          }
+        </ng-template>
+      </mat-menu>
+
       <a mat-button routerLink="/sessions">
         <mat-icon>devices</mat-icon>
         Sessions

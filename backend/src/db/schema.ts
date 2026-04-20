@@ -87,6 +87,32 @@ export const messages = pgTable(
   }),
 );
 
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    invitedUserId: uuid('invited_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    invitedByUserId: uuid('invited_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // One pending invitation per (room, invitee) pair.
+    roomInviteeIdx: uniqueIndex('invitations_room_invitee_idx').on(
+      table.roomId,
+      table.invitedUserId,
+    ),
+    // GET /api/invitations filters by invited_user_id.
+    invitedUserIdx: index('invitations_invited_user_idx').on(table.invitedUserId),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
@@ -97,3 +123,5 @@ export type RoomMemberRow = typeof roomMembers.$inferSelect;
 export type NewRoomMemberRow = typeof roomMembers.$inferInsert;
 export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;
+export type InvitationRow = typeof invitations.$inferSelect;
+export type NewInvitationRow = typeof invitations.$inferInsert;

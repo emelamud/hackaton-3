@@ -17,8 +17,17 @@ Use `pnpm` for all package management.
 /backend        # Express API
 /shared         # Shared TypeScript types used by both FE and BE
 /docker         # Dockerfiles for each service
+/plans          # Roadmap + per-round task & summary files
 docker-compose.yml
 ```
+
+## Plans Folder
+`/plans` is the source of truth for scope and history — always read it before starting work.
+- `plans/master-plan.md` — the full roadmap: numbered rounds, deliverables, and per-role task bullets. Check which rounds are marked ✅ to know what's already shipped.
+- `plans/round-N/` — one folder per round, containing:
+  - `orchestrator_tasks.md`, `backend_tasks.md`, `frontend_tasks.md` — detailed task files written before the round starts
+  - `<role>_work_summary.md` — written after the round: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**
+- When planning a new round, read prior rounds' `_work_summary.md` files for context on deviations and carry-over items (if they have not already been added to the context).
 
 ## Port Conventions
 - Frontend (Angular): `4300`

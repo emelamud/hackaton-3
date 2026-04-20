@@ -13,12 +13,14 @@ import type {
 } from '../../../../../shared/types';
 import type { User } from '../../../../../shared/types';
 import { SocketService } from '../socket/socket.service';
+import { InvitationsService } from '../invitations/invitations.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly socketService = inject(SocketService);
+  private readonly invitationsService = inject(InvitationsService);
 
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
@@ -43,6 +45,8 @@ export class AuthService {
     // If a token survived a reload (in storage), connect the socket now.
     if (this.accessToken) {
       this.socketService.connect(this.accessToken);
+      // Seed pending invitations for the restored session.
+      this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
     }
   }
 
@@ -83,6 +87,7 @@ export class AuthService {
         this.setAccessToken(res.accessToken);
         this.currentUser.set(res.user);
         this.socketService.connect(res.accessToken);
+        this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
       }),
     );
   }
@@ -93,6 +98,7 @@ export class AuthService {
         this.setAccessToken(res.accessToken);
         this.currentUser.set(res.user);
         this.socketService.connect(res.accessToken);
+        this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
       }),
     );
   }
@@ -120,6 +126,8 @@ export class AuthService {
           if (!this.socketService.isConnected()) {
             this.socketService.connect(res.accessToken);
           }
+          // Re-seed pending invitations on (re)authentication.
+          this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
         }),
         catchError(() => {
           this.clearSession();
@@ -143,6 +151,7 @@ export class AuthService {
     this.storage = sessionStorage;
     this.currentUser.set(null);
     this.socketService.disconnect();
+    this.invitationsService.pending.set([]);
   }
 
   private setUserFromToken(token: string): void {

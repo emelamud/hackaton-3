@@ -1,0 +1,68 @@
+:host {
+  display: block;
+  min-width: 26rem;
+  max-width: 32rem;
+}
+
+.manage-room-dialog__header {
+  display: flex;
+  align-items: center;
+}
+
+.manage-room-dialog__room-name {
+  font-weight: 500;
+}
+
+.manage-room-dialog__content {
+  padding: 0;
+  max-height: 32rem;
+}
+
+.manage-room-dialog__tab-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.manage-room-dialog__invite-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.manage-room-dialog__username-field {
+  width: 100%;
+}
+
+.manage-room-dialog__invite-success,
+.manage-room-dialog__public-info,
+.manage-room-dialog__readonly-note {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  border-radius: 0.5rem;
+}
+
+.manage-room-dialog__settings-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.manage-room-dialog__visibility-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.manage-room-dialog__settings-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+// Collapse to single column below md
+@media (max-width: 56.5rem) {
+  :host {
+    min-width: 20rem;
+    max-width: 100%;
+  }
+}

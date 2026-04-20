@@ -4,6 +4,7 @@ import { rooms, roomMembers, users } from '../db/schema';
 import { AppError } from '../errors/AppError';
 import type {
   CreateRoomRequest,
+  PatchRoomRequest,
   Room,
   RoomDetail,
   RoomMember,
@@ -217,4 +218,86 @@ export async function isRoomMember(userId: string, roomId: string): Promise<bool
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
     .limit(1);
   return Boolean(row);
+}
+
+export async function patchRoom(
+  userId: string,
+  roomId: string,
+  body: PatchRoomRequest,
+): Promise<RoomDetail> {
+  // Belt-and-suspenders alongside the zod .refine in the route layer.
+  const hasName = Object.prototype.hasOwnProperty.call(body, 'name');
+  const hasDescription = Object.prototype.hasOwnProperty.call(body, 'description');
+  const hasVisibility = Object.prototype.hasOwnProperty.call(body, 'visibility');
+  if (!hasName && !hasDescription && !hasVisibility) {
+    throw new AppError('At least one field is required', 400);
+  }
+
+  const [room] = await db
+    .select()
+    .from(rooms)
+    .where(eq(rooms.id, roomId))
+    .limit(1);
+
+  if (!room) {
+    throw new AppError('Room not found', 404);
+  }
+
+  const [membership] = await db
+    .select({ role: roomMembers.role })
+    .from(roomMembers)
+    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .limit(1);
+
+  // Hide existence if the caller is not a member (Q2 = 2b allow-list).
+  if (!membership) {
+    throw new AppError('Room not found', 404);
+  }
+
+  if (membership.role !== 'owner' && membership.role !== 'admin') {
+    throw new AppError('Only room owners and admins can edit room settings', 403);
+  }
+
+  // Build the update patch. If the proposed name is equivalent
+  // case-insensitively to the current name, skip the rename — the unique
+  // index would otherwise throw a spurious 409 when the caller is only
+  // fixing casing (or repeating the same value).
+  const patch: {
+    name?: string;
+    description?: string | null;
+    visibility?: RoomVisibility;
+  } = {};
+
+  if (hasName && body.name !== undefined) {
+    const proposed = body.name.trim();
+    if (proposed.toLowerCase() !== room.name.toLowerCase()) {
+      patch.name = proposed;
+    }
+  }
+
+  if (hasDescription) {
+    const rawDescription = body.description;
+    if (rawDescription === null) {
+      patch.description = null;
+    } else if (typeof rawDescription === 'string') {
+      patch.description = rawDescription.trim();
+    }
+  }
+
+  if (hasVisibility && body.visibility !== undefined) {
+    patch.visibility = body.visibility;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    try {
+      await db.update(rooms).set(patch).where(eq(rooms.id, roomId));
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new AppError('Room name already taken', 409);
+      }
+      throw err;
+    }
+  }
+
+  return getRoomDetail(userId, roomId);
 }

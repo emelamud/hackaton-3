@@ -29,3 +29,9 @@ export interface CreateRoomRequest {
   description?: string;
   visibility: RoomVisibility;
 }
+
+export interface PatchRoomRequest {
+  name?: string;
+  description?: string | null;
+  visibility?: RoomVisibility;
+}
