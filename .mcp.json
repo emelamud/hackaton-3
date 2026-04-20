@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "env": {}
+    },
+    "cclsp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "cclsp"
+      ],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "angular": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "angular-mcp-server"]
+    }
+  }
+}
