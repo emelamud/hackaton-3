@@ -26,7 +26,7 @@ src/app/
 - One service per domain concept; no god services
 
 ## Auth Flow
-- **Access token**: stored in a private field of `AuthService` (in-memory only)
+- **Access token**: persisted in Web Storage (`localStorage` when `keepSignedIn=true`, otherwise `sessionStorage`) so reloads don't require a refresh round-trip; XSS exposure is mitigated via CSP, not by keeping the token out of JS reach
   - Exposed only via `getAccessToken()` for the interceptor
 - **Refresh token**: httpOnly cookie — never touched by JS code
 - **App init**: `APP_INITIALIZER` calls `authService.refresh()` silently to restore session on page load

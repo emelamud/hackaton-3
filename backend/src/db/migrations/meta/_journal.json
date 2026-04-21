@@ -29,6 +29,13 @@
       "when": 1776716178428,
       "tag": "0003_add_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776765435414,
+      "tag": "0004_add_password_reset_version",
+      "breakpoints": true
     }
   ]
 }

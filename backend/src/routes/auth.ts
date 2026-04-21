@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
+import { authLimiter } from '../middleware/rateLimit';
 import * as authService from '../services/auth.service';
 import { config } from '../config';
 
@@ -36,6 +37,7 @@ const registerSchema = z.object({
 
 authRouter.post(
   '/register',
+  authLimiter,
   validate(registerSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -60,6 +62,7 @@ const loginSchema = z.object({
 
 authRouter.post(
   '/login',
+  authLimiter,
   validate(loginSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -95,6 +98,7 @@ authRouter.post(
 // POST /api/auth/refresh
 authRouter.post(
   '/refresh',
+  authLimiter,
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const refreshToken = req.cookies?.[REFRESH_COOKIE] as string | undefined;
@@ -126,6 +130,7 @@ const forgotPasswordSchema = z.object({
 
 authRouter.post(
   '/forgot-password',
+  authLimiter,
   validate(forgotPasswordSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -145,6 +150,7 @@ const resetPasswordSchema = z.object({
 
 authRouter.post(
   '/reset-password',
+  authLimiter,
   validate(resetPasswordSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

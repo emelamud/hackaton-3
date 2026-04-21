@@ -3,18 +3,35 @@ import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { sessionsRouter } from './routes/sessions';
 import { roomsRouter } from './routes/rooms';
 import { invitationsRouter, roomInvitationsRouter } from './routes/invitations';
 import { errorHandler } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimit';
 import { initSocketIo } from './socket/io';
 import { config } from './config';
 
 const app = express();
 
+if (config.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const CORS_ORIGIN = 'http://localhost:4300';
+
+app.use(
+  helmet({
+    contentSecurityPolicy: config.nodeEnv === 'production' ? undefined : false,
+    hsts:
+      config.nodeEnv === 'production'
+        ? { maxAge: 31_536_000, includeSubDomains: true }
+        : false,
+    crossOriginResourcePolicy: { policy: 'same-site' },
+  }),
+);
 
 app.use(
   cors({
@@ -22,8 +39,10 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '32kb' }));
 app.use(cookieParser());
+
+app.use('/api/', apiLimiter);
 
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);

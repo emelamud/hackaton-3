@@ -57,7 +57,7 @@
 ---
 
 ### Round 7: Presence
-**Deliverable**: Users see online / AFK / offline dots next to friends and DM participants; state is consistent across tabs.
+**Deliverable**: Users see online / AFK (Away From Keyboard) / offline dots next to friends and DM participants; state is consistent across tabs.
 
 - **[Orchestrator]** `PresenceState` type; presence socket event contract (`presence:update`, `presence:snapshot`)
 - **[BE]** In-memory presence map keyed by userId; aggregate across sockets (online if any tab connected); emit on connect/disconnect + idle timeout

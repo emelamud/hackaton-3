@@ -29,3 +29,6 @@ Thumbs.db
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Dev-only secrets/artifacts (e.g. password-reset tokens while email delivery is unwired)
+.dev-artifacts/

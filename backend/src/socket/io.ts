@@ -21,12 +21,34 @@ const sendMessageSchema = z.object({
   body: z.string(),
 });
 
+// Per-socket token bucket for `message:send`: 5 messages/sec refill, burst 10.
+// Sized around the 3072-char message cap; far above any human typing cadence.
+const MESSAGE_BUCKET_CAPACITY = 10;
+const MESSAGE_REFILL_PER_SEC = 5;
+const messageBuckets = new WeakMap<Socket, { tokens: number; ts: number }>();
+
+function allowMessage(socket: Socket): boolean {
+  const now = Date.now();
+  const prev = messageBuckets.get(socket) ?? { tokens: MESSAGE_BUCKET_CAPACITY, ts: now };
+  const refill = ((now - prev.ts) / 1000) * MESSAGE_REFILL_PER_SEC;
+  const tokens = Math.min(MESSAGE_BUCKET_CAPACITY, prev.tokens + refill);
+  if (tokens < 1) {
+    messageBuckets.set(socket, { tokens, ts: now });
+    return false;
+  }
+  messageBuckets.set(socket, { tokens: tokens - 1, ts: now });
+  return true;
+}
+
 export function initSocketIo(httpServer: http.Server, corsOrigin: string): Server {
   const io = new Server(httpServer, {
     cors: {
       origin: corsOrigin,
       credentials: true,
     },
+    // Well above the 3072-char message cap; blocks >1MB default that would
+    // let one socket exhaust memory parsing a single frame.
+    maxHttpBufferSize: 16 * 1024,
   });
 
   // JWT auth middleware — shares `verifyAccessToken` with HTTP `requireAuth`.
@@ -73,6 +95,10 @@ export function initSocketIo(httpServer: http.Server, corsOrigin: string): Serve
         if (typeof ack !== 'function') return;
 
         try {
+          if (!allowMessage(socket)) {
+            throw new AppError('Rate limit exceeded', 429);
+          }
+
           // Defensive payload shape check so malformed input gets the
           // documented "Invalid payload" string instead of a stack trace.
           const parsed = sendMessageSchema.safeParse(payload);

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   index,
+  integer,
   pgEnum,
   pgTable,
   primaryKey,
@@ -15,6 +16,9 @@ export const users = pgTable('users', {
   email: text('email').unique().notNull(),
   username: text('username').unique().notNull(),
   passwordHash: text('password_hash').notNull(),
+  // Bumped on every successful password reset; embedded in reset JWTs as `v`.
+  // Mismatch → token rejected, giving single-use semantics for reset tokens.
+  passwordResetTokenVersion: integer('password_reset_token_version').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -56,9 +56,9 @@ export class LoginComponent {
       .login({ email: email!, password: password!, keepSignedIn: keepSignedIn ?? false })
       .subscribe({
         next: () => {
-          const returnUrl =
-            this.route.snapshot.queryParamMap.get('returnUrl') ?? '/chat';
-          this.router.navigateByUrl(returnUrl);
+          const raw = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/chat';
+          const safe = /^\/(?![/\\])/.test(raw) ? raw : '/chat';
+          this.router.navigateByUrl(safe);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);

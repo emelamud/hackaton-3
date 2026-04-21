@@ -2,7 +2,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
-import { eq, and } from 'drizzle-orm';
+import { appendFile, mkdir } from 'fs/promises';
+import path from 'path';
+import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, sessions } from '../db/schema';
 import { config } from '../config';
@@ -229,7 +231,10 @@ export async function refresh(
 
 export async function forgotPassword(email: string): Promise<void> {
   const [user] = await db
-    .select({ id: users.id, email: users.email })
+    .select({
+      id: users.id,
+      passwordResetTokenVersion: users.passwordResetTokenVersion,
+    })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
@@ -239,27 +244,58 @@ export async function forgotPassword(email: string): Promise<void> {
     return;
   }
 
-  const resetToken = jwt.sign({ sub: user.id, email: user.email }, config.jwtResetSecret, {
-    expiresIn: '1h',
-  });
+  // `v` binds the token to the current password-reset version. A successful
+  // reset bumps the column atomically, so any prior token (replayed from logs,
+  // email forwarding, etc.) fails the version check and is rejected.
+  const resetToken = jwt.sign(
+    { sub: user.id, v: user.passwordResetTokenVersion },
+    config.jwtResetSecret,
+    { expiresIn: '1h' },
+  );
 
-  // No email service in Round 1 — log to console
-  console.log(`[PASSWORD RESET] Token for ${user.email}: ${resetToken}`);
+  // Email delivery is not wired up yet. In non-production, persist the token
+  // to a gitignored dev-only file so flows can still be tested locally. In
+  // production we silently drop — never log a bearer credential.
+  if (config.nodeEnv !== 'production') {
+    const artifactsDir = path.resolve(process.cwd(), '.dev-artifacts');
+    await mkdir(artifactsDir, { recursive: true });
+    await appendFile(
+      path.join(artifactsDir, 'password-resets.jsonl'),
+      JSON.stringify({ ts: new Date().toISOString(), email, token: resetToken }) + '\n',
+      'utf8',
+    );
+  }
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
-  let payload: { sub: string };
+  let payload: { sub: string; v: number };
   try {
-    payload = jwt.verify(token, config.jwtResetSecret) as { sub: string };
+    payload = jwt.verify(token, config.jwtResetSecret) as { sub: string; v: number };
   } catch {
     throw new AppError('Reset token is invalid or has expired', 400);
   }
 
+  if (typeof payload.sub !== 'string' || typeof payload.v !== 'number') {
+    throw new AppError('Reset token is invalid or has expired', 400);
+  }
+
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+  // Atomic single-use enforcement: only the row whose version still matches
+  // the token's `v` is updated, and the version is bumped in the same write.
+  // A concurrent replay of the same token affects zero rows on the second pass.
   const result = await db
     .update(users)
-    .set({ passwordHash })
-    .where(eq(users.id, payload.sub))
+    .set({
+      passwordHash,
+      passwordResetTokenVersion: sql`${users.passwordResetTokenVersion} + 1`,
+    })
+    .where(
+      and(
+        eq(users.id, payload.sub),
+        eq(users.passwordResetTokenVersion, payload.v),
+      ),
+    )
     .returning({ id: users.id });
 
   if (result.length === 0) {
