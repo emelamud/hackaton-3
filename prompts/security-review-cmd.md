@@ -1,0 +1,3 @@
+I've noticed that passwods are stored withoy any encryption. That's totally unacceptable. Yes, we can fix that. But it would be better to create a comand for security review. I wan't that command to scan both FE and BE for security vulnerabilities and anti-patterns and suggest fix for those. Please note that I don't want this command to include code quality, accessibility or any other reviews. Just security.
+
+Feel free to ask follow up questions!

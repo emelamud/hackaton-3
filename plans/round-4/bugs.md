@@ -2,7 +2,7 @@
 
 Three distinct bugs in Round 4 frontend, with different severities and root causes. All backend checks from `backend_work_summary.md` passed — these are frontend-only.
 
-## 🔴 Bug 1 — Live invitation socket events never reach the badge (critical)
+## 🔴 Bug 1 — Live invitation socket events never reach the badge (critical) — ✅ FIXED
 
 **Symptom:** Alice invites bob while bob's tab is open — badge stays at `0`. Only a fresh login (which triggers HTTP `fetchInitial`) shows the invitation.
 
