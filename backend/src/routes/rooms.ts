@@ -4,7 +4,7 @@ import { validate, validateParams } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
 import * as roomsService from '../services/rooms.service';
 import * as messagesService from '../services/messages.service';
-import { getIo } from '../socket/io';
+import { emitToRoom, getIo } from '../socket/io';
 
 export const roomsRouter = Router();
 
@@ -129,7 +129,7 @@ roomsRouter.patch(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const detail = await roomsService.patchRoom(req.user!.id, req.params.id, req.body);
-      getIo().in(`room:${detail.id}`).emit('room:updated', detail);
+      emitToRoom(detail.id, 'room:updated', detail);
       res.status(200).json(detail);
     } catch (err) {
       next(err);

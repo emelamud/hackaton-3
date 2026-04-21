@@ -1,0 +1,164 @@
+<header class="add-friend-dialog__header px-5 pt-4 gap-2">
+  <h2 mat-dialog-title class="text-title-large m-0">Add a friend</h2>
+  <button
+    mat-icon-button
+    type="button"
+    class="ml-auto"
+    aria-label="Close dialog"
+    (click)="close()"
+  >
+    <mat-icon>close</mat-icon>
+  </button>
+</header>
+
+<mat-dialog-content class="add-friend-dialog__content p-5 gap-4">
+  <mat-form-field appearance="outline" class="add-friend-dialog__search" subscriptSizing="dynamic">
+    <mat-icon matPrefix>search</mat-icon>
+    <mat-label>Search by username</mat-label>
+    <input
+      matInput
+      type="text"
+      [formControl]="searchControl"
+      autocomplete="off"
+      placeholder="Type at least 2 characters"
+    />
+    @if (searching()) {
+      <mat-progress-spinner matSuffix diameter="18" mode="indeterminate" />
+    }
+  </mat-form-field>
+
+  @if (lastQueryTooShort()) {
+    <p class="add-friend-dialog__hint text-body-small text-on-surface-variant m-0">
+      Keep typing… at least 2 characters.
+    </p>
+  } @else if (!searching() && results().length === 0 && searchControl.value.trim().length > 0) {
+    <p class="add-friend-dialog__hint text-body-small text-on-surface-variant m-0">
+      No users match "{{ searchControl.value }}".
+    </p>
+  }
+
+  <div class="add-friend-dialog__results">
+    @for (row of results(); track row.id) {
+      <article class="add-friend-row px-3 py-3 gap-3 border-b-outline-variant">
+        <div class="add-friend-row__user gap-3">
+          <span class="add-friend-row__avatar bg-primary text-on-primary text-label-large">
+            {{ row.username[0].toUpperCase() }}
+          </span>
+          <span class="text-body-medium">{{ row.username }}</span>
+        </div>
+
+        <div class="add-friend-row__actions gap-2 ml-auto">
+          @if (isBanned(row)) {
+            <mat-chip class="add-friend-row__chip" disabled>
+              <mat-icon matChipAvatar>block</mat-icon>
+              Blocked
+            </mat-chip>
+            <button
+              mat-button
+              type="button"
+              [disabled]="isSubmitting(row.id)"
+              (click)="unblock(row)"
+            >
+              Unblock
+            </button>
+          } @else {
+          @switch (effectiveRelationship(row)) {
+            @case ('friend') {
+              <mat-chip class="add-friend-row__chip" disabled>
+                <mat-icon matChipAvatar>check</mat-icon>
+                Friends
+              </mat-chip>
+            }
+            @case ('outgoing_pending') {
+              <mat-chip class="add-friend-row__chip" disabled>
+                <mat-icon matChipAvatar>schedule</mat-icon>
+                Request sent
+              </mat-chip>
+              <button
+                mat-button
+                type="button"
+                color="warn"
+                [disabled]="!outgoingRequestId(row) || isSubmitting(row.id)"
+                (click)="cancelOutgoing(row)"
+              >
+                Cancel
+              </button>
+            }
+            @case ('incoming_pending') {
+              <button
+                mat-flat-button
+                color="primary"
+                type="button"
+                [disabled]="!incomingRequestId(row) || isSubmitting(row.id)"
+                (click)="acceptIncoming(row)"
+              >
+                Accept
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                [disabled]="!incomingRequestId(row) || isSubmitting(row.id)"
+                (click)="rejectIncoming(row)"
+              >
+                Reject
+              </button>
+            }
+            @default {
+              @if (row.composerOpen) {
+                <button
+                  mat-button
+                  type="button"
+                  [disabled]="isSubmitting(row.id)"
+                  (click)="cancelComposer(row)"
+                >
+                  Cancel
+                </button>
+              } @else {
+                <button
+                  mat-flat-button
+                  color="primary"
+                  type="button"
+                  [disabled]="isSubmitting(row.id)"
+                  (click)="openComposer(row)"
+                >
+                  Add friend
+                </button>
+              }
+            }
+          }
+          }
+        </div>
+
+        @if (!isBanned(row) && effectiveRelationship(row) === 'none' && row.composerOpen) {
+          <div class="add-friend-row__composer gap-2">
+            <mat-form-field appearance="outline" class="add-friend-row__message-field" subscriptSizing="dynamic">
+              <mat-label>Optional message</mat-label>
+              <textarea
+                matInput
+                [formControl]="messageControl"
+                maxlength="500"
+                rows="2"
+                placeholder="Say hi…"
+              ></textarea>
+              <mat-hint align="end">{{ messageControl.value.length }}/500</mat-hint>
+            </mat-form-field>
+            <button
+              mat-flat-button
+              color="primary"
+              type="button"
+              class="add-friend-row__send"
+              [disabled]="isSubmitting(row.id)"
+              (click)="sendRequest(row)"
+            >
+              @if (isSubmitting(row.id)) {
+                <mat-progress-spinner diameter="18" mode="indeterminate" />
+              } @else {
+                Send
+              }
+            </button>
+          </div>
+        }
+      </article>
+    }
+  </div>
+</mat-dialog-content>

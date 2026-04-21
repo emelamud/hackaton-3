@@ -10,10 +10,13 @@ import type {
   ForgotPasswordRequest,
   ResetPasswordRequest,
   RefreshResponse,
-} from '../../../../../shared/types';
-import type { User } from '../../../../../shared/types';
+} from '@shared';
+import type { User } from '@shared';
 import { SocketService } from '../socket/socket.service';
 import { InvitationsService } from '../invitations/invitations.service';
+import { FriendsService } from '../friends/friends.service';
+import { UserBansService } from '../user-bans/user-bans.service';
+import { DmsService } from '../dms/dms.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -21,6 +24,12 @@ export class AuthService {
   private readonly router = inject(Router);
   private readonly socketService = inject(SocketService);
   private readonly invitationsService = inject(InvitationsService);
+  private readonly friendsService = inject(FriendsService);
+  private readonly userBansService = inject(UserBansService);
+  // Eagerly instantiate `DmsService` so its `dm:created` socket subscription is
+  // active before the first DM arrives. The reference is retained on `this`
+  // so `strict` TS tree-shaking / unused-locals lint rules don't flag it.
+  protected readonly dmsService = inject(DmsService);
 
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
@@ -45,8 +54,10 @@ export class AuthService {
     // If a token survived a reload (in storage), connect the socket now.
     if (this.accessToken) {
       this.socketService.connect(this.accessToken);
-      // Seed pending invitations for the restored session.
+      // Seed pending invitations + friends + bans state for the restored session.
       this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
+      this.friendsService.fetchInitial().subscribe({ error: () => undefined });
+      this.userBansService.fetchInitial().subscribe({ error: () => undefined });
     }
   }
 
@@ -88,6 +99,8 @@ export class AuthService {
         this.currentUser.set(res.user);
         this.socketService.connect(res.accessToken);
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
+        this.friendsService.fetchInitial().subscribe({ error: () => undefined });
+        this.userBansService.fetchInitial().subscribe({ error: () => undefined });
       }),
     );
   }
@@ -99,6 +112,8 @@ export class AuthService {
         this.currentUser.set(res.user);
         this.socketService.connect(res.accessToken);
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
+        this.friendsService.fetchInitial().subscribe({ error: () => undefined });
+        this.userBansService.fetchInitial().subscribe({ error: () => undefined });
       }),
     );
   }
@@ -126,8 +141,10 @@ export class AuthService {
           if (!this.socketService.isConnected()) {
             this.socketService.connect(res.accessToken);
           }
-          // Re-seed pending invitations on (re)authentication.
+          // Re-seed pending invitations + friends + bans on (re)authentication.
           this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
+          this.friendsService.fetchInitial().subscribe({ error: () => undefined });
+          this.userBansService.fetchInitial().subscribe({ error: () => undefined });
         }),
         catchError(() => {
           this.clearSession();
@@ -152,6 +169,8 @@ export class AuthService {
     this.currentUser.set(null);
     this.socketService.disconnect();
     this.invitationsService.pending.set([]);
+    this.friendsService.reset();
+    this.userBansService.reset();
   }
 
   private setUserFromToken(token: string): void {

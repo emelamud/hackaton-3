@@ -16,7 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { SessionsService } from './sessions.service';
 import { AuthService } from '../core/auth/auth.service';
-import type { Session } from '../../../../shared/types';
+import type { Session } from '@shared';
 
 @Component({
   selector: 'app-sessions',

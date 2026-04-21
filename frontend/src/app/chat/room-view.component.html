@@ -7,12 +7,34 @@
   } @else if (room(); as r) {
     <header class="room-view__header px-5 py-4 border-b-outline-variant">
       <div class="room-view__title-row gap-2">
-        <mat-icon class="room-view__icon text-on-surface-variant">
-          {{ r.visibility === 'private' ? 'lock' : 'tag' }}
-        </mat-icon>
-        <h1 class="text-title-medium m-0">{{ r.name }}</h1>
+        @if (r.type === 'dm') {
+          <!-- Reserved presence-dot slot to the left of the username (Round 7). -->
+          <span class="room-view__presence" aria-hidden="true"></span>
+          <mat-icon class="room-view__icon text-on-surface-variant">alternate_email</mat-icon>
+          <h1 class="text-title-medium m-0">{{ r.dmPeer?.username ?? '' }}</h1>
+          <button
+            mat-icon-button
+            type="button"
+            class="ml-auto"
+            [matMenuTriggerFor]="dmMenu"
+            aria-label="DM actions"
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #dmMenu="matMenu" xPosition="before">
+            <button mat-menu-item type="button" (click)="blockDmPeer()">
+              <mat-icon>block</mat-icon>
+              <span>Block user</span>
+            </button>
+          </mat-menu>
+        } @else {
+          <mat-icon class="room-view__icon text-on-surface-variant">
+            {{ r.visibility === 'private' ? 'lock' : 'tag' }}
+          </mat-icon>
+          <h1 class="text-title-medium m-0">{{ r.name ?? '' }}</h1>
+        }
       </div>
-      @if (r.description) {
+      @if (r.type === 'channel' && r.description) {
         <p class="room-view__description text-body-medium text-on-surface-variant m-0 mt-1">
           {{ r.description }}
         </p>
@@ -22,7 +44,7 @@
     <app-message-list class="room-view__messages" [roomId]="r.id" />
     <app-message-composer
       class="room-view__composer"
-      [roomId]="r.id"
+      [roomDetail]="r"
       (messageSent)="onMessageSent($event)"
     />
   } @else if (loadError()) {

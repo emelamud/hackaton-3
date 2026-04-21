@@ -317,11 +317,29 @@ One primary button per screen, max.
 - Open with `MatDialog.open(MyDialogComponent, { width: '28rem' })`.
 - Structure: `<h2 mat-dialog-title class="text-title-large">`, `<mat-dialog-content>`, `<mat-dialog-actions align="end">`.
 - Actions: `mat-button` (cancel) + `mat-flat-button color="primary"` (confirm).
+- **Submit success closes the dialog.** If the dialog's primary action is "submit X", the success branch must call `dialogRef.close(result)` — do not leave the user staring at a stale form and a transient success line. Stay-open-on-error is the default (so the user can correct input without retyping). The exception is a dialog whose purpose is repeated action inside one session (e.g. an Add-Friend flow where the user may search several people in a row) — there, document the stay-open decision in an inline comment on the submit handler.
 
 ### 7.9 Snackbars
 
 - `MatSnackBar.open(message, action?, { duration: 5000 })`.
 - Use for transient confirmations ("Message sent"). Never for errors that require action.
+
+### 7.9a Badges
+
+- Bind the **value** to `matBadge`. To hide at zero, resolve the binding to `null` — Material hides the badge entirely when the input is nullish.
+- Do **not** use `matBadgeHidden` to suppress a zero badge. It misfires in Material M3 and leaves a visible `0` bubble.
+
+```html
+<!-- correct -->
+<button mat-icon-button [matBadge]="count() || null" aria-label="Notifications">
+  <mat-icon>mail</mat-icon>
+</button>
+
+<!-- wrong — a visible "0" will leak through -->
+<button mat-icon-button [matBadge]="count()" [matBadgeHidden]="count() === 0">
+  <mat-icon>mail</mat-icon>
+</button>
+```
 
 ### 7.10 States
 

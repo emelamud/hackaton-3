@@ -3,3 +3,6 @@ export * from './auth';
 export * from './room';
 export * from './message';
 export * from './invitation';
+export * from './friend';
+export * from './user-ban';
+export * from './socket';

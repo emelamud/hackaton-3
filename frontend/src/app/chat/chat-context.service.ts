@@ -1,7 +1,7 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SocketService } from '../core/socket/socket.service';
-import type { RoomDetail } from '../../../../shared/types';
+import type { RoomDetail } from '@shared';
 
 /**
  * Shares the currently-open room between `RoomViewComponent` (writer)
@@ -23,7 +23,7 @@ export class ChatContextService {
 
   constructor() {
     this.socketService
-      .on<RoomDetail>('room:updated')
+      .on('room:updated')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((detail) => {
         const open = this.currentRoom();

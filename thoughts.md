@@ -1,0 +1,10 @@
+- Creating "design system" skill to keep UI consistent with angular material was definitylly a right move. 
+- Commit & Push after each round, to be able to rollback. Yes, I'm aware of /rewind, but good old git still looks like something more reliable for me. 
+what is round? how planning was organized?
+- After planning session I supposed claude code to stop before implementation, usually that works. but not this time
+- Have a lot of troubles fixing login on FE (round 1), perhaps I should have made a description of what should login look like (from Angular prospective) and ask Claude to review that, ask follow up questions and prepare detailed document.
+- Claude code starts lagging badly, when context grows over 150K.
+- after unsuccessfull attempt to pass through round 2 and 3, decided to split each round into smaller parts, which was a right descision! 
+- bugfix with clear context
+- /plan-round-N than /clear than /implement-round-N
+- After rounds 5 and 6 I had to spend essential ammount of time working on configs. After round 6 I added frontend-tester subagent ... .

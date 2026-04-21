@@ -59,7 +59,7 @@
                   >tag</mat-icon
                 >
                 <span matListItemTitle class="room-item__name text-body-medium">{{
-                  room.name
+                  room.name ?? ''
                 }}</span>
                 <span
                   matListItemMeta
@@ -92,7 +92,7 @@
                   >lock</mat-icon
                 >
                 <span matListItemTitle class="room-item__name text-body-medium">{{
-                  room.name
+                  room.name ?? ''
                 }}</span>
                 <span
                   matListItemMeta
@@ -106,7 +106,12 @@
         </div>
       }
 
-      @if (search() && publicRooms().length === 0 && privateRooms().length === 0) {
+      @if (
+        search() &&
+        publicRooms().length === 0 &&
+        privateRooms().length === 0 &&
+        dmRooms().length === 0
+      ) {
         <div class="rooms-sidebar__empty px-4 py-3">
           <p class="text-body-medium text-on-surface-variant m-0">
             No rooms match "{{ search() }}".
@@ -114,5 +119,229 @@
         </div>
       }
     }
+
+    <!-- Direct Messages section -->
+    <section class="rooms-sidebar__dms">
+      <header class="rooms-sidebar__group-header rooms-sidebar__section-header px-4 pt-4 pb-2 gap-2">
+        <button
+          mat-icon-button
+          type="button"
+          class="rooms-sidebar__collapse-btn"
+          [attr.aria-expanded]="dmsExpanded()"
+          aria-label="Toggle direct messages section"
+          (click)="toggleDms()"
+        >
+          <mat-icon>{{ dmsExpanded() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+        </button>
+        <span class="text-label-small text-on-surface-variant rooms-sidebar__section-title">
+          Direct Messages
+        </span>
+        @if (dmRooms().length > 0) {
+          <span class="rooms-sidebar__count-chip bg-surface-container text-on-surface-variant text-label-small px-2">
+            {{ dmRooms().length }}
+          </span>
+        }
+      </header>
+
+      @if (dmsExpanded()) {
+        @if (dmRooms().length === 0) {
+          <div class="rooms-sidebar__empty px-4 py-2">
+            <p class="text-body-small text-on-surface-variant m-0">
+              No direct messages yet. Start one from the Friends list.
+            </p>
+          </div>
+        } @else {
+          <ul class="rooms-sidebar__dm-list">
+            @for (room of dmRooms(); track room.id) {
+              <li
+                class="dm-item px-3 py-2 gap-2"
+                [class.dm-item--banned]="room.dmPeer && isBanned(room.dmPeer.userId)"
+              >
+                <a
+                  [routerLink]="['/chat', room.id]"
+                  routerLinkActive="dm-item--active"
+                  class="dm-item__link gap-2"
+                >
+                  <span class="dm-item__presence" aria-hidden="true"></span>
+                  <span class="dm-item__avatar bg-primary text-on-primary text-label-small">
+                    {{ (room.dmPeer?.username ?? '?')[0].toUpperCase() }}
+                  </span>
+                  <span
+                    class="dm-item__name text-body-medium"
+                    [class.text-on-surface-variant]="
+                      room.dmPeer && isBanned(room.dmPeer.userId)
+                    "
+                  >
+                    {{ room.dmPeer?.username ?? '' }}
+                  </span>
+                  @if (room.dmPeer && isBanned(room.dmPeer.userId)) {
+                    <mat-icon
+                      class="dm-item__lock text-on-surface-variant"
+                      matTooltip="Personal messaging is blocked"
+                      aria-label="Personal messaging is blocked"
+                    >
+                      lock
+                    </mat-icon>
+                  }
+                </a>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="dm-item__more ml-auto"
+                  [matMenuTriggerFor]="dmRowMenu"
+                  aria-label="Direct message actions"
+                >
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #dmRowMenu="matMenu" xPosition="before">
+                  <button
+                    mat-menu-item
+                    type="button"
+                    [disabled]="room.dmPeer ? isBanned(room.dmPeer.userId) : false"
+                    (click)="blockDmPeer(room)"
+                  >
+                    <mat-icon>block</mat-icon>
+                    <span>Block user</span>
+                  </button>
+                </mat-menu>
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+
+    <!-- Friends section -->
+    <section class="rooms-sidebar__friends">
+      <header class="rooms-sidebar__group-header rooms-sidebar__section-header px-4 pt-4 pb-2 gap-2">
+        <button
+          mat-icon-button
+          type="button"
+          class="rooms-sidebar__collapse-btn"
+          [attr.aria-expanded]="friendsExpanded()"
+          aria-label="Toggle friends section"
+          (click)="toggleFriends()"
+        >
+          <mat-icon>{{ friendsExpanded() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+        </button>
+        <span class="text-label-small text-on-surface-variant rooms-sidebar__section-title">
+          Friends
+        </span>
+        @if (friendsService.friendCount() > 0) {
+          <span class="rooms-sidebar__count-chip bg-surface-container text-on-surface-variant text-label-small px-2">
+            {{ friendsService.friendCount() }}
+          </span>
+        }
+        <button
+          mat-icon-button
+          type="button"
+          class="ml-auto"
+          matTooltip="Add friend"
+          aria-label="Add friend"
+          (click)="openAddFriendDialog()"
+        >
+          <mat-icon>person_add</mat-icon>
+        </button>
+      </header>
+
+      @if (friendsExpanded()) {
+        @if (friendsService.friendCount() === 0) {
+          <div class="rooms-sidebar__empty px-4 py-3 gap-2">
+            <p class="text-body-medium text-on-surface-variant m-0">
+              No friends yet. Add someone to start chatting.
+            </p>
+            <button
+              mat-stroked-button
+              type="button"
+              class="rooms-sidebar__add-friend-cta"
+              (click)="openAddFriendDialog()"
+            >
+              <mat-icon>person_add</mat-icon>
+              Add friend
+            </button>
+          </div>
+        } @else {
+          <ul class="rooms-sidebar__friend-list">
+            @for (friend of friendsService.friends(); track friend.userId) {
+              <li class="friend-item px-3 py-2 gap-2">
+                <span class="friend-item__presence" aria-hidden="true"></span>
+                <span class="friend-item__avatar bg-primary text-on-primary text-label-small">
+                  {{ friend.username[0].toUpperCase() }}
+                </span>
+                <span class="friend-item__name text-body-medium">{{ friend.username }}</span>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="friend-item__message ml-auto"
+                  [matTooltip]="
+                    isBanned(friend.userId)
+                      ? 'Personal messaging is blocked'
+                      : 'Message'
+                  "
+                  [attr.aria-label]="'Message ' + friend.username"
+                  [disabled]="isBanned(friend.userId) || isOpeningDm(friend.userId)"
+                  (click)="messageFriend(friend)"
+                >
+                  <mat-icon>chat_bubble_outline</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="friend-item__more"
+                  [matMenuTriggerFor]="friendMenu"
+                  [disabled]="isRemoving(friend.userId)"
+                  aria-label="Friend actions"
+                >
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #friendMenu="matMenu" xPosition="before">
+                  <button mat-menu-item type="button" (click)="removeFriend(friend)">
+                    <mat-icon>person_remove</mat-icon>
+                    <span>Remove friend</span>
+                  </button>
+                  <button mat-menu-item type="button" (click)="blockFriend(friend)">
+                    <mat-icon>block</mat-icon>
+                    <span>Block user</span>
+                  </button>
+                </mat-menu>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (friendsService.outgoingCount() > 0) {
+          <div class="rooms-sidebar__outgoing px-3 py-2">
+            <button
+              mat-button
+              type="button"
+              class="rooms-sidebar__outgoing-toggle text-body-small text-on-surface-variant"
+              [attr.aria-expanded]="outgoingExpanded()"
+              (click)="toggleOutgoing()"
+            >
+              <mat-icon>{{ outgoingExpanded() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+              {{ friendsService.outgoingCount() }} pending…
+            </button>
+            @if (outgoingExpanded()) {
+              <ul class="rooms-sidebar__outgoing-list">
+                @for (req of friendsService.outgoingRequests(); track req.id) {
+                  <li class="outgoing-item px-3 py-2 gap-2">
+                    <span class="outgoing-item__name text-body-medium">{{ req.toUsername }}</span>
+                    <button
+                      mat-button
+                      type="button"
+                      class="ml-auto"
+                      [disabled]="isCancelling(req.id)"
+                      (click)="cancelOutgoing(req)"
+                    >
+                      Cancel
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      }
+    </section>
   </div>
 </aside>

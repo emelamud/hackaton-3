@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database migrations..."
-node dist/db/migrate.js
+node dist/backend/src/db/migrate.js
 
 echo "Starting backend server..."
-exec node dist/index.js
+exec node dist/backend/src/index.js

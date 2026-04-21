@@ -1,16 +1,18 @@
-import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { rooms, roomMembers, users } from '../db/schema';
 import { AppError } from '../errors/AppError';
 import type {
   CreateRoomRequest,
+  DmPeer,
   PatchRoomRequest,
   Room,
   RoomDetail,
   RoomMember,
   RoomRole,
+  RoomType,
   RoomVisibility,
-} from '../types/shared';
+} from '@shared';
 
 function isUniqueViolation(err: unknown): boolean {
   // PG error code 23505 === unique_violation. Drizzle may wrap the pg error,
@@ -32,6 +34,7 @@ export async function listRoomsForUser(userId: string): Promise<Room[]> {
   const result = await db
     .select({
       id: rooms.id,
+      type: rooms.type,
       name: rooms.name,
       description: rooms.description,
       visibility: rooms.visibility,
@@ -44,14 +47,46 @@ export async function listRoomsForUser(userId: string): Promise<Room[]> {
     .where(eq(roomMembers.userId, userId))
     .orderBy(desc(rooms.createdAt));
 
+  // For DMs, resolve `dmPeer` — the OTHER member from the caller's POV.
+  // Doing this with a `WITH` / lateral join would avoid the N+1, but DM rows
+  // per user are bounded by the user's friends count (realistic ceiling: low
+  // hundreds), so a second batch query is fine for hackathon scope.
+  const dmRoomIds = result.filter((r) => r.type === 'dm').map((r) => r.id);
+  const dmPeerByRoomId = new Map<string, DmPeer>();
+  if (dmRoomIds.length > 0) {
+    const peerRows = await db
+      .select({
+        roomId: roomMembers.roomId,
+        userId: roomMembers.userId,
+        username: users.username,
+      })
+      .from(roomMembers)
+      .innerJoin(users, eq(users.id, roomMembers.userId))
+      .where(
+        and(
+          ne(roomMembers.userId, userId),
+          // Use an IN filter inline — Drizzle's typed helpers accept sql`...`
+          // fragments for small value lists, and `dmRoomIds` is user-bounded.
+          sql`${roomMembers.roomId} IN ${dmRoomIds}`,
+        ),
+      );
+    for (const row of peerRows) {
+      dmPeerByRoomId.set(row.roomId, { userId: row.userId, username: row.username });
+    }
+  }
+
   return result.map((r) => ({
     id: r.id,
+    type: r.type as RoomType,
     name: r.name,
     description: r.description,
     visibility: r.visibility as RoomVisibility,
     ownerId: r.ownerId,
     createdAt: r.createdAt.toISOString(),
     memberCount: Number(r.memberCount),
+    ...(r.type === 'dm' && dmPeerByRoomId.has(r.id)
+      ? { dmPeer: dmPeerByRoomId.get(r.id)! }
+      : {}),
   }));
 }
 
@@ -110,8 +145,21 @@ export async function getRoomDetail(userId: string, roomId: string): Promise<Roo
     .from(roomMembers)
     .where(eq(roomMembers.roomId, roomId));
 
+  // `dmPeer` from the caller's POV — the OTHER member. Channels never carry
+  // it; DMs always carry it (there are exactly two members so the filter is
+  // guaranteed to yield one row).
+  const type = room.type as RoomType;
+  let dmPeer: DmPeer | undefined;
+  if (type === 'dm') {
+    const peer = members.find((m) => m.userId !== userId);
+    if (peer) {
+      dmPeer = { userId: peer.userId, username: peer.username };
+    }
+  }
+
   return {
     id: room.id,
+    type,
     name: room.name,
     description: room.description,
     visibility: room.visibility as RoomVisibility,
@@ -119,6 +167,7 @@ export async function getRoomDetail(userId: string, roomId: string): Promise<Roo
     createdAt: room.createdAt.toISOString(),
     memberCount: Number(memberCount),
     members,
+    ...(dmPeer ? { dmPeer } : {}),
   };
 }
 
@@ -131,6 +180,7 @@ export async function createRoom(
       const [inserted] = await tx
         .insert(rooms)
         .values({
+          type: 'channel',
           name: body.name,
           description: body.description ?? null,
           visibility: body.visibility,
@@ -167,6 +217,12 @@ export async function joinRoom(userId: string, roomId: string): Promise<RoomDeta
     throw new AppError('Room not found', 404);
   }
 
+  // DM short-circuit runs BEFORE the membership lookup so non-members also
+  // get this error, per the contract.
+  if (room.type === 'dm') {
+    throw new AppError('Direct messages are only reachable via /api/dm', 403);
+  }
+
   const [existing] = await db
     .select({ userId: roomMembers.userId })
     .from(roomMembers)
@@ -189,6 +245,19 @@ export async function joinRoom(userId: string, roomId: string): Promise<RoomDeta
 }
 
 export async function leaveRoom(userId: string, roomId: string): Promise<void> {
+  // Short-circuit on DMs before touching membership so existing DM members
+  // get the dedicated contract error rather than falling through to the
+  // "owner cannot leave" / 404 paths.
+  const [room] = await db
+    .select({ type: rooms.type })
+    .from(rooms)
+    .where(eq(rooms.id, roomId))
+    .limit(1);
+
+  if (room?.type === 'dm') {
+    throw new AppError('DM rooms cannot be left', 403);
+  }
+
   const [membership] = await db
     .select({ role: roomMembers.role })
     .from(roomMembers)
@@ -243,6 +312,11 @@ export async function patchRoom(
     throw new AppError('Room not found', 404);
   }
 
+  // DM short-circuit — DM rooms are immutable by contract.
+  if (room.type === 'dm') {
+    throw new AppError('DM rooms are not editable', 400);
+  }
+
   const [membership] = await db
     .select({ role: roomMembers.role })
     .from(roomMembers)
@@ -270,7 +344,8 @@ export async function patchRoom(
 
   if (hasName && body.name !== undefined) {
     const proposed = body.name.trim();
-    if (proposed.toLowerCase() !== room.name.toLowerCase()) {
+    // `room.name` is only null for DMs, and we already short-circuited those.
+    if (room.name !== null && proposed.toLowerCase() !== room.name.toLowerCase()) {
       patch.name = proposed;
     }
   }

@@ -27,7 +27,7 @@ import type {
   PatchRoomRequest,
   RoomDetail,
   RoomVisibility,
-} from '../../../../shared/types';
+} from '@shared';
 
 export interface ManageRoomDialogData {
   room: RoomDetail;
@@ -82,7 +82,6 @@ export class ManageRoomDialogComponent {
 
   // ------- Invitations tab state -------
   readonly inviteSubmitting = signal(false);
-  readonly inviteSuccessUsername = signal<string | null>(null);
 
   readonly inviteForm = this.fb.group({
     username: this.fb.control('', [Validators.required, Validators.minLength(1)]),
@@ -91,8 +90,12 @@ export class ManageRoomDialogComponent {
   // ------- Settings tab state -------
   readonly settingsSubmitting = signal(false);
 
+  // `Room.name` is nullable (DMs have no name), but this dialog is only opened
+  // for channels from the room-rail — see `RoomRailComponent.openManageDialog`
+  // which hides the button for DMs. Defaulting to '' keeps the form valid if
+  // a caller ever opens it against a DM by mistake.
   readonly settingsForm = this.fb.group({
-    name: this.fb.control(this.data.room.name, [
+    name: this.fb.control(this.data.room.name ?? '', [
       Validators.required,
       Validators.minLength(3),
       Validators.maxLength(64),
@@ -125,7 +128,6 @@ export class ManageRoomDialogComponent {
         delete errors['serverError'];
         ctrl.setErrors(Object.keys(errors).length > 0 ? errors : null);
       }
-      if (this.inviteSuccessUsername()) this.inviteSuccessUsername.set(null);
     });
   }
 
@@ -145,17 +147,13 @@ export class ManageRoomDialogComponent {
     }
 
     this.inviteSubmitting.set(true);
-    this.inviteSuccessUsername.set(null);
     this.inviteForm.disable();
 
     this.invitationsService.createForRoom(this.room().id, { username }).subscribe({
       next: () => {
         this.inviteSubmitting.set(false);
-        this.inviteSuccessUsername.set(username);
-        this.inviteForm.enable();
-        this.inviteForm.reset({ username: '' });
-        this.inviteForm.controls.username.markAsPristine();
-        this.inviteForm.controls.username.markAsUntouched();
+        this.snackBar.open(`Invited @${username}`, 'Dismiss', { duration: 4000 });
+        this.dialogRef.close(null);
       },
       error: (err: HttpErrorResponse) => {
         this.inviteSubmitting.set(false);
@@ -225,9 +223,12 @@ export class ManageRoomDialogComponent {
     const body: PatchRoomRequest = {};
 
     const nextName = (raw.name ?? '').trim();
-    if (nextName && nextName.toLowerCase() !== current.name.toLowerCase()) {
+    // `current.name` is nullable only for DMs; we don't open this dialog for
+    // DMs, but the `?? ''` fallback keeps the comparison null-safe.
+    const currentName = current.name ?? '';
+    if (nextName && nextName.toLowerCase() !== currentName.toLowerCase()) {
       body.name = nextName;
-    } else if (nextName && nextName !== current.name) {
+    } else if (nextName && nextName !== currentName) {
       // Same name, different casing — the server treats this as a no-op but we
       // still let it through so the user sees the change they made.
       body.name = nextName;

@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { validate, validateParams } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
 import * as invitationsService from '../services/invitations.service';
-import { getIo } from '../socket/io';
-import type { InvitationRevokedPayload } from '../types/shared';
+import { emitToRoom, emitToUser, getIo } from '../socket/io';
 
 const idSchema = z.object({
   id: z.string().uuid(),
@@ -43,7 +42,7 @@ invitationsRouter.post(
       // Subscription sync happens BEFORE broadcast so the accepter's own tabs
       // are in `room:<id>` in time to receive the `room:updated` event below.
       getIo().in(`user:${req.user!.id}`).socketsJoin(`room:${room.id}`);
-      getIo().in(`room:${room.id}`).emit('room:updated', room);
+      emitToRoom(room.id, 'room:updated', room);
       res.status(200).json(room);
     } catch (err) {
       next(err);
@@ -70,11 +69,10 @@ invitationsRouter.delete(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const inv = await invitationsService.revokeInvitation(req.user!.id, req.params.id);
-      const payload: InvitationRevokedPayload = {
+      emitToUser(inv.invitedUserId, 'invitation:revoked', {
         invitationId: inv.id,
         roomId: inv.roomId,
-      };
-      getIo().in(`user:${inv.invitedUserId}`).emit('invitation:revoked', payload);
+      });
       res.status(204).send();
     } catch (err) {
       next(err);
@@ -99,7 +97,7 @@ roomInvitationsRouter.post(
         req.params.id,
         req.body,
       );
-      getIo().in(`user:${inv.invitedUserId}`).emit('invitation:new', inv);
+      emitToUser(inv.invitedUserId, 'invitation:new', inv);
       res.status(201).json(inv);
     } catch (err) {
       next(err);

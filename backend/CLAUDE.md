@@ -16,9 +16,11 @@ src/
     validate.ts     # Zod validation helper
   routes/           # Thin controllers: parse, validate, call service, respond
   services/         # Business logic and DB queries (no req/res)
-  types/            # Local types not in /shared
+  socket/           # Socket.io server init + typed emit helpers (emitToUser, emitToRoom)
   index.ts          # Express app entry point
 ```
+
+Shared types live in `/shared/types/` and are imported via the `@shared` path alias (configured in `backend/tsconfig.json`). Do not copy shared types into `backend/src/`.
 
 ## Drizzle ORM
 - Define tables in `src/db/schema.ts` using `drizzle-orm/pg-core`
@@ -44,3 +46,8 @@ src/
 
 ## Environment Variables
 All config lives in `.env` (copied from `.env.example`). Access via `process.env.VAR_NAME` — use a typed `config.ts` module to centralise and validate on startup.
+
+## Testing policy
+Per-round verification is a **smoke harness**: an ad-hoc Node script under `tmp/round-N/smoke.js` driving the new endpoints + socket events end-to-end. Capture actual observed HTTP bodies + socket payloads in the round summary, not "passed".
+
+Formal integration tests (Jest + Supertest across the full endpoint surface) are **deliberately deferred** for hackathon scope. Do not flag their absence as a Config Improvement in round summaries — the deferral is a known, accepted trade-off.

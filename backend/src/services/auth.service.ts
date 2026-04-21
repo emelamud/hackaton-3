@@ -14,7 +14,7 @@ import type {
   LoginRequest,
   AuthResponse,
   RefreshResponse,
-} from '../types/shared';
+} from '@shared';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_TTL = '15m';

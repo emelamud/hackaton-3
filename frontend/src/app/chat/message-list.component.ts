@@ -17,7 +17,7 @@ import { DatePipe } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MessagesService } from './messages.service';
-import type { Message } from '../../../../shared/types';
+import type { Message } from '@shared';
 
 /** Distance-from-bottom (rem) inside which we auto-scroll on new messages. */
 const STICK_TO_BOTTOM_THRESHOLD_REM = 5; // ~80 px at 16 px root

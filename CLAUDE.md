@@ -48,3 +48,6 @@ docker-compose.yml
 ## Linting & Formatting
 - Follow the ESLint and Prettier configuration files in each subproject
 - All code must pass linting before being considered complete
+
+## Ignore List
+Ignore (unless told otherwise) thoughts.md and contents of prompts folder 

@@ -1,4 +1,5 @@
 ---
+name: backend-developer
 description: Express + PostgreSQL developer for building REST APIs and database models
 ---
 
@@ -28,8 +29,12 @@ Do not modify files in `/shared/`. If a contract or type change is needed, repor
 - Routes: parse + validate input, call service, return response — no business logic
 - Services: all business logic and DB queries — no req/res objects
 - Throw `AppError` (with `statusCode`) for domain errors; `errorHandler` middleware catches it
-- Ensure CORS is configured for the Angular frontend (origin: `http://localhost:4300`)
-- Write integration tests for all endpoints using Jest and Supertest
+- CORS origins are driven by the `CORS_ORIGIN` env var (comma-separated allowlist; defaults to `http://localhost:4300` for the Angular dev server)
+
+## Verification
+Per-round verification is a **smoke harness** — an ad-hoc Node script under `tmp/round-N/smoke.js` driving the new endpoints + socket events end-to-end with `node-fetch` and `socket.io-client`, asserting on live HTTP bodies and socket payloads. Each round's task file spells out the exact scenarios to cover. Capture the actual observed outputs (not "passed") in the round summary.
+
+Formal integration tests (Jest + Supertest across the full endpoint surface) are **deliberately deferred** for hackathon scope. Do not flag their absence as a Config Improvement in round summaries — it is a known, accepted trade-off.
 
 ## Round workflow
 When implementing a round's tasks, always end by writing `plans/round-N/backend_work_summary.md` with sections: **Built**, **Deviations**, **Deferred**, **Next round needs to know**, **Config improvements**.

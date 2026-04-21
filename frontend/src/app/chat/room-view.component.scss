@@ -23,6 +23,13 @@
   align-items: center;
 }
 
+.room-view__presence {
+  // Reserved slot for the peer presence dot — populated in Round 7.
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+}
+
 .room-view__loading {
   display: flex;
   align-items: center;

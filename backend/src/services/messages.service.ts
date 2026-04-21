@@ -1,13 +1,17 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { db } from '../db';
-import { messages, rooms, users } from '../db/schema';
+import { messages, roomMembers, rooms, users } from '../db/schema';
 import { AppError } from '../errors/AppError';
 import * as roomsService from './rooms.service';
-import type { Message } from '../types/shared';
+import * as userBansService from './user-bans.service';
+import type { Message } from '@shared';
 
-async function assertRoomAndMembership(userId: string, roomId: string): Promise<void> {
+async function assertRoomAndMembership(
+  userId: string,
+  roomId: string,
+): Promise<{ type: 'channel' | 'dm' }> {
   const [room] = await db
-    .select({ id: rooms.id })
+    .select({ id: rooms.id, type: rooms.type })
     .from(rooms)
     .where(eq(rooms.id, roomId))
     .limit(1);
@@ -20,6 +24,8 @@ async function assertRoomAndMembership(userId: string, roomId: string): Promise<
   if (!isMember) {
     throw new AppError('Not a room member', 403);
   }
+
+  return { type: room.type as 'channel' | 'dm' };
 }
 
 export async function persistMessage(
@@ -32,7 +38,22 @@ export async function persistMessage(
     throw new AppError('Body must be between 1 and 3072 characters', 400);
   }
 
-  await assertRoomAndMembership(userId, roomId);
+  const { type } = await assertRoomAndMembership(userId, roomId);
+
+  // Round 6 — DM-ban gate. Only fires for DMs; channel rooms skip the lookup
+  // entirely per Q7/Q9 (channel conversations are never gated on user-bans).
+  if (type === 'dm') {
+    // Resolve the other DM participant: DMs have exactly two `room_members`.
+    const [peer] = await db
+      .select({ userId: roomMembers.userId })
+      .from(roomMembers)
+      .where(and(eq(roomMembers.roomId, roomId), ne(roomMembers.userId, userId)))
+      .limit(1);
+
+    if (peer && (await userBansService.hasBanBetween(userId, peer.userId))) {
+      throw new AppError('Personal messaging is blocked', 403);
+    }
+  }
 
   const [inserted] = await db
     .insert(messages)

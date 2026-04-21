@@ -11,7 +11,7 @@ import type {
   PatchRoomRequest,
   Invitation,
   CreateInvitationRequest,
-} from '../../../../shared/types';
+} from '@shared';
 
 @Injectable({ providedIn: 'root' })
 export class RoomsService {
@@ -26,22 +26,31 @@ export class RoomsService {
   constructor() {
     // Keep the sidebar in sync with room edits and invitation-accept broadcasts.
     this.socketService
-      .on<RoomDetail>('room:updated')
+      .on('room:updated')
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((detail) => {
-        const sidebarShape = this.toSidebarShape(detail);
-        this.roomsSignal.update((list) => {
-          const idx = list.findIndex((r) => r.id === detail.id);
-          if (idx === -1) {
-            // Not in the list yet — happens on the accepter's first sighting
-            // after `invitation:accept`. Prepend so it shows up at the top.
-            return [sidebarShape, ...list];
-          }
-          const next = list.slice();
-          next[idx] = sidebarShape;
-          return next;
-        });
-      });
+      .subscribe((detail) => this.upsertRoom(detail));
+  }
+
+  /**
+   * Insert the room at the top of the list (newest first) if absent, otherwise
+   * replace the existing row in-place. Called from the `room:updated` handler
+   * AND from `DmsService` (both the HTTP `openDm()` tap and the `dm:created`
+   * socket subscription). The service owns `roomsSignal` — components never
+   * mutate it directly.
+   */
+  upsertRoom(detail: RoomDetail): void {
+    const sidebarShape = this.toSidebarShape(detail);
+    this.roomsSignal.update((list) => {
+      const idx = list.findIndex((r) => r.id === detail.id);
+      if (idx === -1) {
+        // Not in the list yet — happens on the accepter's first sighting after
+        // `invitation:accept`, and on every first-time `dm:created` broadcast.
+        return [sidebarShape, ...list];
+      }
+      const next = list.slice();
+      next[idx] = sidebarShape;
+      return next;
+    });
   }
 
   list(): Observable<Room[]> {
@@ -87,12 +96,14 @@ export class RoomsService {
   private toSidebarShape(detail: RoomDetail): Room {
     return {
       id: detail.id,
+      type: detail.type,
       name: detail.name,
       description: detail.description,
       visibility: detail.visibility,
       ownerId: detail.ownerId,
       createdAt: detail.createdAt,
       memberCount: detail.memberCount,
+      dmPeer: detail.dmPeer,
     };
   }
 }

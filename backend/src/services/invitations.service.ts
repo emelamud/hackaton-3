@@ -3,11 +3,7 @@ import { db } from '../db';
 import { invitations, roomMembers, rooms, users } from '../db/schema';
 import { AppError } from '../errors/AppError';
 import * as roomsService from './rooms.service';
-import type {
-  CreateInvitationRequest,
-  Invitation,
-  RoomDetail,
-} from '../types/shared';
+import type { CreateInvitationRequest, Invitation, RoomDetail } from '@shared';
 
 function isUniqueViolation(err: unknown): boolean {
   // PG error code 23505 === unique_violation. Drizzle may wrap the pg error,
@@ -48,7 +44,10 @@ async function loadDenormalisedInvitation(invitationId: string): Promise<Invitat
   return {
     id: row.id,
     roomId: row.roomId,
-    roomName: row.roomName,
+    // `rooms.name` went nullable in Round 6, but invitations only exist for
+    // channels (the create path rejects DMs with 400 before insert), so the
+    // join always yields a non-null name here. Fall back defensively.
+    roomName: row.roomName ?? '',
     invitedUserId: row.invitedUserId,
     invitedByUserId: row.invitedByUserId,
     invitedByUsername: row.invitedByUsername,
@@ -69,6 +68,12 @@ export async function createInvitation(
 
   if (!room) {
     throw new AppError('Room not found', 404);
+  }
+
+  // DM short-circuit runs FIRST per contract — DMs have no invitation flow,
+  // and the ordering is deterministic so FE can assert on the exact error.
+  if (room.type === 'dm') {
+    throw new AppError('DMs cannot have invitations', 400);
   }
 
   if (room.visibility !== 'private') {
@@ -143,7 +148,10 @@ export async function listInvitationsForUser(
   return rows.map((r) => ({
     id: r.id,
     roomId: r.roomId,
-    roomName: r.roomName,
+    // Same nullable-`rooms.name` story as `loadDenormalisedInvitation` — we
+    // never produce invitation rows for DM rooms, so the join always yields
+    // a non-null name. Defensive fallback preserved.
+    roomName: r.roomName ?? '',
     invitedUserId: r.invitedUserId,
     invitedByUserId: r.invitedByUserId,
     invitedByUsername: r.invitedByUsername,

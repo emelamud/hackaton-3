@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  border-bottom-width: 1px;
+  border-bottom-width: 0.0625rem;
   border-bottom-style: solid;
   position: sticky;
   top: 0;
@@ -45,12 +45,14 @@
   align-items: center;
 }
 
-.shell__invitations-btn {
+.shell__invitations-btn,
+.shell__friends-btn {
   // mat-badge needs a little breathing room from neighbours
   margin-right: 0.25rem;
 }
 
-.shell__invitations-empty {
+.shell__invitations-empty,
+.shell__friends-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -58,7 +60,8 @@
   text-align: center;
 }
 
-.shell__invitations-list {
+.shell__invitations-list,
+.shell__friends-list {
   display: flex;
   flex-direction: column;
   max-height: 24rem;

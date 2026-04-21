@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import type { Invitation } from '../../../../../shared/types';
+import type { Invitation } from '@shared';
 
 /**
  * Dumb presentation row used inside the top-nav invitations dropdown.

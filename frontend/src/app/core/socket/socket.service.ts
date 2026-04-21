@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
+import type { ServerToClientEvents } from '@shared';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -14,7 +15,10 @@ import { environment } from '../../../environments/environment';
  * user belongs to on connect, and keeps the subscriptions in sync via the
  * REST handlers. Clients must **not** emit `room:join` / `room:leave`.
  */
-type Listener = { event: string; handler: (payload: unknown) => void };
+interface Listener {
+  event: string;
+  handler: (...args: unknown[]) => void;
+}
 
 @Injectable({ providedIn: 'root' })
 export class SocketService {
@@ -77,16 +81,21 @@ export class SocketService {
    * Cold Observable: registers a listener that stays alive across reconnects.
    * Each subscriber gets its own handler so `takeUntilDestroyed()` cleans up
    * properly when a component is disposed.
+   *
+   * Typed against the shared `ServerToClientEvents` contract — the event name
+   * determines the payload type, so callers don't need a generic at the call
+   * site.
    */
-  on<T>(event: string): Observable<T> {
-    return new Observable<T>((observer) => {
-      const handler = (payload: T) => observer.next(payload);
-      const entry: Listener = { event, handler: handler as (payload: unknown) => void };
+  on<K extends keyof ServerToClientEvents>(event: K): Observable<ServerToClientEvents[K]> {
+    return new Observable<ServerToClientEvents[K]>((observer) => {
+      const handler = (payload: ServerToClientEvents[K]) => observer.next(payload);
+      const rawHandler = handler as (...args: unknown[]) => void;
+      const entry: Listener = { event, handler: rawHandler };
       this.listeners.add(entry);
-      this.socket?.on(event, handler);
+      this.socket?.on(event as string, rawHandler);
       return () => {
         this.listeners.delete(entry);
-        this.socket?.off(event, handler);
+        this.socket?.off(event as string, rawHandler);
       };
     });
   }

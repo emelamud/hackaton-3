@@ -6,11 +6,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../core/auth/auth.service';
 import { InvitationsService } from '../core/invitations/invitations.service';
 import { InvitationItemComponent } from '../core/invitations/invitation-item.component';
-import type { Invitation } from '../../../../shared/types';
+import { FriendsService } from '../core/friends/friends.service';
+import { FriendRequestItemComponent } from '../core/friends/friend-request-item.component';
+import { BlockedUsersDialogComponent } from '../core/user-bans/blocked-users-dialog.component';
+import type { Invitation, FriendRequest } from '@shared';
 
 @Component({
   selector: 'app-shell',
@@ -26,6 +30,7 @@ import type { Invitation } from '../../../../shared/types';
     MatBadgeModule,
     MatSnackBarModule,
     InvitationItemComponent,
+    FriendRequestItemComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.component.html',
@@ -34,12 +39,23 @@ import type { Invitation } from '../../../../shared/types';
 export class ShellComponent {
   protected readonly authService = inject(AuthService);
   protected readonly invitationsService = inject(InvitationsService);
+  protected readonly friendsService = inject(FriendsService);
   private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly signingOut = signal(false);
   /** Disable buttons on a row while its accept/reject is in flight. */
   readonly busyIds = signal<ReadonlySet<string>>(new Set());
+
+  openBlockedUsers(): void {
+    this.dialog.open(BlockedUsersDialogComponent, {
+      width: '28rem',
+      maxWidth: '95vw',
+      autoFocus: 'first-tabbable',
+      restoreFocus: true,
+    });
+  }
 
   signOut(): void {
     this.signingOut.set(true);
@@ -84,6 +100,47 @@ export class ShellComponent {
       error: () => {
         this.markBusy(invitation.id, false);
         this.snackBar.open('Failed to reject invitation. Please try again.', 'Dismiss', {
+          duration: 5000,
+        });
+      },
+    });
+  }
+
+  onAcceptFriend(request: FriendRequest, menuTrigger: MatMenuTrigger): void {
+    this.markBusy(request.id, true);
+    this.friendsService.acceptRequest(request.id).subscribe({
+      next: () => {
+        this.markBusy(request.id, false);
+        this.snackBar.open(
+          `You and @${request.fromUsername} are now friends`,
+          'Dismiss',
+          { duration: 4000 },
+        );
+        if (this.friendsService.incomingCount() === 0) {
+          menuTrigger.closeMenu();
+        }
+      },
+      error: () => {
+        this.markBusy(request.id, false);
+        this.snackBar.open('Failed to accept friend request. Please try again.', 'Dismiss', {
+          duration: 5000,
+        });
+      },
+    });
+  }
+
+  onRejectFriend(request: FriendRequest, menuTrigger: MatMenuTrigger): void {
+    this.markBusy(request.id, true);
+    this.friendsService.rejectRequest(request.id).subscribe({
+      next: () => {
+        this.markBusy(request.id, false);
+        if (this.friendsService.incomingCount() === 0) {
+          menuTrigger.closeMenu();
+        }
+      },
+      error: () => {
+        this.markBusy(request.id, false);
+        this.snackBar.open('Failed to reject friend request. Please try again.', 'Dismiss', {
           duration: 5000,
         });
       },

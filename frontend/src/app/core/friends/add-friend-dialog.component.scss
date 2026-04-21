@@ -1,0 +1,80 @@
+:host {
+  display: block;
+  min-width: 22rem;
+}
+
+.add-friend-dialog__header {
+  display: flex;
+  align-items: center;
+}
+
+.add-friend-dialog__content {
+  display: flex;
+  flex-direction: column;
+  max-height: 32rem;
+  overflow-y: auto;
+}
+
+.add-friend-dialog__search {
+  width: 100%;
+}
+
+.add-friend-dialog__results {
+  display: flex;
+  flex-direction: column;
+}
+
+.add-friend-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  row-gap: 0.5rem;
+  border-bottom-width: 0.0625rem;
+  border-bottom-style: solid;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.add-friend-row__user {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.add-friend-row__avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.add-friend-row__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.add-friend-row__chip {
+  pointer-events: none;
+}
+
+.add-friend-row__composer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+}
+
+.add-friend-row__message-field {
+  flex: 1;
+}
+
+.add-friend-row__send {
+  margin-top: 0.25rem;
+}

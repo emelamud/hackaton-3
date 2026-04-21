@@ -32,3 +32,9 @@ Thumbs.db
 
 # Dev-only secrets/artifacts (e.g. password-reset tokens while email delivery is unwired)
 .dev-artifacts/
+
+# tsc spill next to shared .ts sources (shared/ has no build step of its own)
+shared/types/*.js
+
+# Per-round smoke harness installs
+tmp/**/node_modules/

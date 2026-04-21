@@ -9,7 +9,7 @@ import {
   ManageRoomDialogComponent,
   type ManageRoomDialogData,
 } from './manage-room-dialog.component';
-import type { RoomMember } from '../../../../shared/types';
+import type { RoomMember } from '@shared';
 
 @Component({
   selector: 'app-room-rail',

@@ -10,7 +10,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { RoomsService } from './rooms.service';
-import type { RoomDetail, RoomVisibility } from '../../../../shared/types';
+import type { RoomDetail, RoomVisibility } from '@shared';
 
 @Component({
   selector: 'app-create-room-dialog',

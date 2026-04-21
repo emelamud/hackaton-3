@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, filter, from, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { SocketService } from '../core/socket/socket.service';
-import type { Message, MessageSendAck, SendMessagePayload } from '../../../../shared/types';
+import type { Message, MessageSendAck, SendMessagePayload } from '@shared';
 
 @Injectable({ providedIn: 'root' })
 export class MessagesService {
@@ -40,6 +40,6 @@ export class MessagesService {
    * side to the room the caller is rendering.
    */
   newMessages$(roomId: string): Observable<Message> {
-    return this.socketService.on<Message>('message:new').pipe(filter((m) => m.roomId === roomId));
+    return this.socketService.on('message:new').pipe(filter((m) => m.roomId === roomId));
   }
 }

@@ -9,6 +9,13 @@ import { authRouter } from './routes/auth';
 import { sessionsRouter } from './routes/sessions';
 import { roomsRouter } from './routes/rooms';
 import { invitationsRouter, roomInvitationsRouter } from './routes/invitations';
+import {
+  friendshipsRouter,
+  friendRequestsRouter,
+  usersRouter,
+} from './routes/friends';
+import { dmRouter } from './routes/dm';
+import { userBansRouter } from './routes/user-bans';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimit';
 import { initSocketIo } from './socket/io';
@@ -19,8 +26,6 @@ const app = express();
 if (config.nodeEnv === 'production') {
   app.set('trust proxy', 1);
 }
-
-const CORS_ORIGIN = 'http://localhost:4300';
 
 app.use(
   helmet({
@@ -35,7 +40,7 @@ app.use(
 
 app.use(
   cors({
-    origin: CORS_ORIGIN,
+    origin: config.corsOrigins,
     credentials: true,
   }),
 );
@@ -53,11 +58,16 @@ app.use('/api/auth/sessions', sessionsRouter);
 app.use('/api/rooms/:id/invitations', roomInvitationsRouter);
 app.use('/api/rooms', roomsRouter);
 app.use('/api/invitations', invitationsRouter);
+app.use('/api/friends', friendshipsRouter);
+app.use('/api/friend-requests', friendRequestsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/dm', dmRouter);
+app.use('/api/user-bans', userBansRouter);
 
 app.use(errorHandler);
 
 const httpServer = http.createServer(app);
-initSocketIo(httpServer, CORS_ORIGIN);
+initSocketIo(httpServer, config.corsOrigins);
 
 httpServer.listen(config.port, () => {
   console.log(`Backend running on port ${config.port}`);

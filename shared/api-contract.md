@@ -151,6 +151,13 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 - `POST /api/rooms/:id/join` on a private room returns `403` — private rooms are only reachable via invitations (see §Invitation Endpoints below).
 - `PATCH /api/rooms/:id` requires `role in ('owner', 'admin')`. Admin promotion lands in a later moderation round, so in practice only owners qualify today.
 - Members in `RoomDetail.members` are ordered: owner first, then admins by `joinedAt` ascending, then regular members by `joinedAt` ascending.
+- Rooms carry a `type: 'channel' | 'dm'` discriminator (Round 6). All rules above describe `'channel'` behaviour unless otherwise stated. Existing rooms are `'channel'`; DMs are created via `POST /api/dm` (see §Direct Message Endpoints).
+- `GET /api/rooms` returns both channels and DMs the caller is a member of, ordered by `createdAt` descending. Callers distinguish via `type`.
+- `Room.name` and `Room.ownerId` are `string | null`; they are `null` for DMs and non-null for channels. `Room.dmPeer` (shape `{ userId, username }`) is present only for `type === 'dm'` and always names the OTHER participant from the caller's POV (never the caller themselves).
+- DMs (`type='dm'`) cannot be mutated via `PATCH /api/rooms/:id` — returns `400 { "error": "DM rooms are not editable" }`.
+- DMs cannot be joined via `POST /api/rooms/:id/join` — returns `403 { "error": "Direct messages are only reachable via /api/dm" }`. The check short-circuits before the membership lookup, so non-members also see this error.
+- DMs cannot be left via `POST /api/rooms/:id/leave` — returns `403 { "error": "DM rooms cannot be left" }`. Leaving would break the 2-participant invariant; severance happens through user-to-user ban (see §User Ban Endpoints).
+- Posting to `POST /api/rooms/:id/invitations` against a DM returns `400 { "error": "DMs cannot have invitations" }` (DMs have no admins and no invitation flow — requirement §2.5.1).
 
 ### Summary
 
@@ -239,7 +246,7 @@ Join a public room. Idempotent: calling when already a member returns `200` with
 ---
 
 ### POST `/api/rooms/:id/leave`
-Leave a room. The owner cannot leave their own room (requirement §2.4.5) — they must delete it instead (room deletion is Round 5a).
+Leave a room. The owner cannot leave their own room (requirement §2.4.5) — they must delete it instead (room deletion is Round 11).
 
 **Success** `204`
 
@@ -270,7 +277,7 @@ Return up to the 50 most-recent messages in a room, ordered by `createdAt` **asc
 - `403` — caller is not a member: `{ "error": "Not a room member" }`
 - `404` — room not found: `{ "error": "Room not found" }`
 
-No cursor / `before` parameter in Round 3. Round 5 introduces `?before=<messageId>&limit=` and keeps the same response shape.
+No cursor / `before` parameter in Round 3. Round 9 introduces `?before=<messageId>&limit=` and keeps the same response shape.
 
 ---
 
@@ -399,6 +406,317 @@ Revoke an invitation. Deletes the row and emits `invitation:revoked` to `user:<i
 
 ---
 
+## User Search Endpoint
+
+Requires `Authorization: Bearer <accessToken>` and returns `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Summary
+
+| Method | Path | Query | Success | Errors |
+|--------|------|-------|---------|--------|
+| GET | `/api/users/search` | `?q=<prefix>` | `200 UserSearchResult[]` (up to 20, self excluded, case-insensitive prefix match, `relationship` pre-computed) | `400` `q` shorter than 2 chars |
+
+---
+
+### GET `/api/users/search`
+Type-ahead search for users by username prefix. The response carries the caller-relative `relationship` so the UI can render the correct action control without a second lookup.
+
+**Query params**:
+- `q` — required, trimmed, 2–64 characters. Comparison is case-insensitive prefix (`username ILIKE q || '%'`).
+
+**Behaviour**:
+- The caller is always excluded from results (their own `UserSearchResult` is never emitted; the `'self'` relationship value exists for completeness but never appears in responses).
+- Ordering: exact case-insensitive match first (if any), then alphabetical by username. Deterministic so the client can rely on stable ordering for `distinctUntilChanged`-style type-ahead.
+- Up to 20 results returned.
+
+**Relationship computation** (server-side, one response):
+- `friend` — a `friendships` row exists between caller and result (in either direction — rows are stored symmetrically).
+- `outgoing_pending` — a `friend_requests` row with `from_user_id = caller` and `to_user_id = result`.
+- `incoming_pending` — a `friend_requests` row with `from_user_id = result` and `to_user_id = caller`.
+- `none` — otherwise.
+
+**Success** `200` — `UserSearchResult[]`:
+```json
+[
+  { "id": "uuid", "username": "alice", "relationship": "friend" },
+  { "id": "uuid", "username": "alicia", "relationship": "none" }
+]
+```
+
+**Errors**:
+- `400` — query too short: `{ "error": "Search query must be at least 2 characters" }`
+- `400` — validation error (e.g. `q` longer than 64): `{ "error": "...", "details": [...] }`
+
+---
+
+## Friend Endpoints
+
+All friend endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Friendships are symmetric. `GET /api/friends` returns the caller's friends from the caller's POV (`Friend.userId` is the OTHER user; the caller never appears in their own list).
+- Removing a friend is unilateral — no confirmation — and emits `friend:removed` to the other side.
+- A friend request is unique per **unordered pair** of users: creating a second request while any pending request exists between the two users returns `409`, regardless of direction.
+- Sending a friend request to an existing friend returns `409 { error: "You are already friends with this user" }`.
+- Sending to yourself returns `400 { error: "You cannot send a friend request to yourself" }`.
+- Only the recipient may `accept` or `reject`; only the sender may `cancel` (DELETE) a pending request.
+- Accept is atomic: inside a single transaction, the request row is deleted and two symmetric `friendships` rows are inserted. Re-posting accept on a stale request → `404 "Friend request not found"`.
+- Round 5 does **not** implement user-to-user ban (requirement §2.3.5). Ban semantics land with DMs (Round 6) because they only gate personal messaging.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| GET | `/api/friends` | — | `200 Friend[]` (caller's friends, newest first) | — |
+| DELETE | `/api/friends/:userId` | — | `204` + `friend:removed` emitted to the other side | `404` not a friend |
+| POST | `/api/friend-requests` | `CreateFriendRequestBody` | `201 FriendRequest` + `friend:request:new` emitted to recipient | `400` self-target / validation, `404` username not found, `409` already friends / pending exists |
+| GET | `/api/friend-requests/incoming` | — | `200 FriendRequest[]` (where caller is `toUserId`, newest first) | — |
+| GET | `/api/friend-requests/outgoing` | — | `200 FriendRequest[]` (where caller is `fromUserId`, newest first) | — |
+| POST | `/api/friend-requests/:id/accept` | — | `200 Friend` (from the caller's POV — the original sender) + `friend:request:accepted` emitted to BOTH sides (each receives the opposite `friend` payload) | `403` not the recipient, `404` not found |
+| POST | `/api/friend-requests/:id/reject` | — | `204` + `friend:request:rejected` emitted to sender | `403` not the recipient, `404` not found |
+| DELETE | `/api/friend-requests/:id` | — | `204` + `friend:request:cancelled` emitted to recipient | `403` not the sender, `404` not found |
+
+---
+
+### GET `/api/friends`
+List the caller's friends, ordered by `friendshipCreatedAt` descending.
+
+**Success** `200` — `Friend[]`:
+```json
+[
+  { "userId": "uuid", "username": "bob", "friendshipCreatedAt": "ISO" }
+]
+```
+
+`userId` is the other user's id — the caller never appears in their own list.
+
+---
+
+### DELETE `/api/friends/:userId`
+Remove a friendship unilaterally. Both symmetric rows are deleted in one transaction. Emits `friend:removed` to `user:<userId>` so the other party's UI clears the row live.
+
+**Success** `204`.
+
+**Errors**:
+- `404` — no friendship exists with this user: `{ "error": "Not a friend" }`
+
+---
+
+### POST `/api/friend-requests`
+Create a pending friend request by username. Emits `friend:request:new` to `user:<toUserId>`.
+
+**Request body** (`CreateFriendRequestBody`):
+```json
+{ "toUsername": "bob", "message": "hey, let's connect" }
+```
+
+**Body validation**:
+- `toUsername` — required, trimmed, 1–64 characters.
+- `message` — optional, trimmed, max 500 characters. Empty-after-trim is stored as `null`.
+
+**Success** `201` — `FriendRequest`:
+```json
+{
+  "id": "uuid",
+  "fromUserId": "uuid",
+  "fromUsername": "alice",
+  "toUserId": "uuid",
+  "toUsername": "bob",
+  "message": "hey, let's connect",
+  "createdAt": "ISO"
+}
+```
+
+Server also emits `friend:request:new` with the same payload to `user:<toUserId>`.
+
+**Errors**:
+- `400` — self-target: `{ "error": "You cannot send a friend request to yourself" }`
+- `400` — validation error: `{ "error": "...", "details": [...] }`
+- `404` — target username does not exist: `{ "error": "User not found" }`
+- `409` — caller and target are already friends: `{ "error": "You are already friends with this user" }`
+- `409` — a pending request already exists between the two users (either direction): `{ "error": "A pending friend request already exists between you and this user" }`
+
+---
+
+### GET `/api/friend-requests/incoming`
+List the caller's pending **incoming** friend requests (where caller is `toUserId`), newest first.
+
+**Success** `200` — `FriendRequest[]`.
+
+---
+
+### GET `/api/friend-requests/outgoing`
+List the caller's pending **outgoing** friend requests (where caller is `fromUserId`), newest first.
+
+**Success** `200` — `FriendRequest[]`.
+
+---
+
+### POST `/api/friend-requests/:id/accept`
+Accept an incoming friend request. Inside a single transaction: insert two symmetric `friendships` rows and delete the request row.
+
+**Success** `200` — `Friend` (from the caller's POV — i.e. the original sender):
+```json
+{ "userId": "uuid", "username": "alice", "friendshipCreatedAt": "ISO" }
+```
+
+Server also emits `friend:request:accepted` separately to both sides:
+- To `user:<senderId>` with `friend.userId = recipient.id`.
+- To `user:<recipientId>` with `friend.userId = sender.id`.
+
+**Errors**:
+- `403` — caller is not the recipient: `{ "error": "Forbidden" }`
+- `404` — request not found (including the case where it was already accepted / cancelled): `{ "error": "Friend request not found" }`
+
+---
+
+### POST `/api/friend-requests/:id/reject`
+Reject an incoming friend request. Deletes the row and emits `friend:request:rejected` to the sender (unlike invitation-reject, which is silent to the inviter — friend requests surface an outgoing-pending UI affordance that needs live updates).
+
+**Success** `204`.
+
+**Errors**:
+- `403` — caller is not the recipient: `{ "error": "Forbidden" }`
+- `404` — request not found: `{ "error": "Friend request not found" }`
+
+---
+
+### DELETE `/api/friend-requests/:id`
+Cancel an outgoing friend request. Deletes the row and emits `friend:request:cancelled` to the recipient so their incoming-requests UI clears live.
+
+**Success** `204`.
+
+**Errors**:
+- `403` — caller is not the sender: `{ "error": "Forbidden" }`
+- `404` — request not found: `{ "error": "Friend request not found" }`
+
+---
+
+## Direct Message Endpoints
+
+All DM endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- A DM is an upsertable 1:1 `rooms` row with `type='dm'` and exactly two `room_members` entries. DMs have no owner, no admins; both members carry `role='member'`. `name`, `ownerId`, and `description` are always `null`; `visibility` is `'private'` and is not surfaced in the UI.
+- DMs are unique per **unordered pair** of users. `POST /api/dm` is idempotent: a second call for the same pair returns the existing room.
+- Starting a DM requires an existing friendship with the target (requirement §2.3.6 — strict friendship gate at creation). Non-friend target → `403 { "error": "You must be friends to start a direct message" }`.
+- Starting a DM with a user who has banned the caller (or who the caller has banned) → `403 { "error": "Personal messaging is blocked" }`. The same string appears on `message:send` acks when a ban exists — FE can render the same frozen-composer UX.
+- Self-DM is rejected: `400 { "error": "You cannot open a DM with yourself" }`.
+- Once the DM exists, subsequent messaging is NOT gated on friendship — only on "no active ban in either direction" (requirement §2.3.5 freeze semantics). Friendship removal alone does not freeze the DM.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| POST | `/api/dm` | `OpenDmRequest` | `201 RoomDetail` (first-time create — emits `dm:created` to both participants) or `200 RoomDetail` (idempotent re-hit — no broadcast) | `400` self-target / validation, `403` not friends / banned either direction, `404` target user not found |
+
+---
+
+### POST `/api/dm`
+Upsert a direct-message room between the caller and `toUserId`. Idempotent: if the pair already has a DM, the existing `RoomDetail` is returned with status `200` and no socket broadcast fires. First-time creation returns `201` and emits `dm:created` to both participants' `user:<id>` rooms (each side's payload has `dmPeer` populated with the OTHER participant). Both users' existing sockets are joined to `room:<dmRoomId>` before the broadcast so the first `message:new` lands correctly.
+
+**Request body** (`OpenDmRequest`):
+```json
+{ "toUserId": "uuid" }
+```
+
+**Success** `201` (first-time) or `200` (existing) — `RoomDetail`:
+```json
+{
+  "id": "uuid",
+  "type": "dm",
+  "name": null,
+  "description": null,
+  "visibility": "private",
+  "ownerId": null,
+  "createdAt": "ISO",
+  "memberCount": 2,
+  "dmPeer": { "userId": "uuid", "username": "bob" },
+  "members": [
+    { "roomId": "uuid", "userId": "uuid", "username": "alice", "role": "member", "joinedAt": "ISO" },
+    { "roomId": "uuid", "userId": "uuid", "username": "bob", "role": "member", "joinedAt": "ISO" }
+  ]
+}
+```
+
+**Errors**:
+- `400` — self-target: `{ "error": "You cannot open a DM with yourself" }`
+- `400` — validation error: `{ "error": "...", "details": [...] }`
+- `403` — not friends with target: `{ "error": "You must be friends to start a direct message" }`
+- `403` — active ban in either direction: `{ "error": "Personal messaging is blocked" }`
+- `404` — target user does not exist: `{ "error": "User not found" }`
+
+---
+
+## User Ban Endpoints
+
+All user-ban endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- A user-ban is **directional**: the `user_bans` row records `(blocker, blocked)`. Only the original blocker can remove their own ban. Banning a user who has already banned the caller is allowed and creates the mirror row; both rows must be removed (each by its own blocker) to fully clear the pair.
+- Creating a ban atomically severs any friendship and cancels any pending `friend_requests` between the two users in either direction. The friend-request cleanup is silent — no `friend:request:cancelled` broadcast fires to either side (the stale outgoing-pending UI refreshes on next fetch).
+- Self-ban is rejected: `400 { "error": "You cannot ban yourself" }`.
+- DM send to / from a banned user is blocked in either direction regardless of which side issued the ban — see `message:send` ack under §Socket Events.
+- Unban does **not** restore friendship (requirement §2.3.5: friendship termination is permanent). The previously-banned user must re-friend manually via the standard friend-request flow.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| GET | `/api/user-bans` | — | `200 UserBan[]` (caller's blocked list, newest first) | — |
+| POST | `/api/user-bans` | `CreateUserBanRequest` | `204` + `user:ban:applied` emitted to the victim + (if the two were friends) `friend:removed` emitted to the victim | `400` self-target / validation, `404` target user not found, `409` already banned |
+| DELETE | `/api/user-bans/:userId` | — | `204` + `user:ban:removed` emitted to the previously-banned user | `404` no matching ban exists |
+
+---
+
+### GET `/api/user-bans`
+List the users the caller has banned, ordered by `createdAt` descending.
+
+**Success** `200` — `UserBan[]`:
+```json
+[
+  { "userId": "uuid", "username": "bob", "createdAt": "ISO" }
+]
+```
+
+`userId` is the OTHER user (the blocked party); the caller is always the blocker. Mirrors the `Friend.userId` convention.
+
+---
+
+### POST `/api/user-bans`
+Block a user. Atomically inserts the `user_bans(blocker=caller, blocked=target)` row, deletes any symmetric `friendships` rows between the two users, and cancels any pending `friend_requests` in either direction — all inside one transaction.
+
+Emits:
+- `user:ban:applied` to `user:<targetUserId>` with payload `{ userId: <callerId> }`.
+- `friend:removed` to `user:<targetUserId>` with payload `{ userId: <callerId> }` — only if the two users were actually friends. This keeps Round 5's `friend:removed` wiring in charge of the friends-list UI update.
+
+**Request body** (`CreateUserBanRequest`):
+```json
+{ "userId": "uuid" }
+```
+
+**Success** `204`.
+
+**Errors**:
+- `400` — self-target: `{ "error": "You cannot ban yourself" }`
+- `400` — validation error: `{ "error": "...", "details": [...] }`
+- `404` — target user does not exist: `{ "error": "User not found" }`
+- `409` — caller has already banned this user: `{ "error": "User is already banned" }`
+
+---
+
+### DELETE `/api/user-bans/:userId`
+Unblock a user the caller previously banned. Deletes exactly the `(blocker=caller, blocked=:userId)` row — any mirror ban owned by the other party is untouched (requires that party to unblock themselves).
+
+Emits `user:ban:removed` to `user:<:userId>` with payload `{ userId: <callerId> }`, so the previously-banned user's composer can unfreeze live. No `friend:*` event — friendship is not restored.
+
+**Success** `204`.
+
+**Errors**:
+- `404` — no ban row owned by the caller matches this target: `{ "error": "Not banned" }`
+
+---
+
 ## Socket Events
 
 Socket.io v4 channel for real-time messaging. Runs on the same HTTP server as Express.
@@ -448,6 +766,7 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
     - `{ "ok": false, "error": "Not a room member" }`
     - `{ "ok": false, "error": "Room not found" }`
     - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields
+    - `{ "ok": false, "error": "Personal messaging is blocked" }` — target room has `type='dm'` and a `user_bans` row exists in either direction between the two participants (Round 6). Only fires for DMs; channel rooms never produce this ack.
 - On success the server additionally broadcasts `message:new` (see below) to everyone in `room:<roomId>` **except the sender socket**. The sender renders its own message from the ack, so the broadcast excludes it to avoid duplicates. Other tabs of the same user receive the broadcast normally (different sockets, same user).
 
 ### Server → Client events
@@ -480,6 +799,87 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
   - `PATCH /api/rooms/:id` (any field changed).
   - `POST /api/invitations/:id/accept` (new member in `members`, `memberCount` bumped).
 - **Not** fired on `POST /api/rooms/:id/join` or `POST /api/rooms/:id/leave` in Round 4 — those events are deferred polish. Existing members reload to see count changes until a later round retrofits member-change broadcasts.
+
+#### `friend:request:new`
+- Payload: `FriendRequest` (fully denormalised — includes `fromUsername`, `toUsername`, and optional `message`).
+  ```json
+  { "id": "uuid", "fromUserId": "uuid", "fromUsername": "alice", "toUserId": "uuid", "toUsername": "bob", "message": "hi", "createdAt": "ISO" }
+  ```
+- Fired to `user:<toUserId>` after `POST /api/friend-requests` succeeds. The recipient's tabs render a notification. The sender does **not** receive a self-broadcast (they already have the 201 response body).
+
+#### `friend:request:cancelled`
+- Payload: `FriendRequestCancelledPayload`.
+  ```json
+  { "requestId": "uuid" }
+  ```
+- Fired to `user:<toUserId>` after `DELETE /api/friend-requests/:id` succeeds. The recipient's incoming-requests list drops the row live.
+- **Not** fired to the sender — they already own the action.
+
+#### `friend:request:accepted`
+- Payload: `FriendRequestAcceptedPayload` — `{ requestId, friend }`.
+  ```json
+  { "requestId": "uuid", "friend": { "userId": "uuid", "username": "alice", "friendshipCreatedAt": "ISO" } }
+  ```
+- Fired **separately** to both sides of the original request:
+  - To `user:<senderId>`: `friend.userId` is the recipient (from the sender's POV, their new friend is the recipient).
+  - To `user:<recipientId>`: `friend.userId` is the sender (from the recipient's POV, their new friend is the sender).
+- Each side prepends `payload.friend` to their local friends signal and removes the `requestId` from whichever pending list (incoming for the recipient, outgoing for the sender) held it.
+
+#### `friend:request:rejected`
+- Payload: `FriendRequestRejectedPayload`.
+  ```json
+  { "requestId": "uuid" }
+  ```
+- Fired to `user:<fromUserId>` after `POST /api/friend-requests/:id/reject`. The sender's outgoing-pending list drops the row live.
+- **Not** fired back to the recipient — they just performed the action.
+
+#### `friend:removed`
+- Payload: `FriendRemovedPayload`.
+  ```json
+  { "userId": "uuid" }
+  ```
+- Fired to `user:<otherUserId>` after `DELETE /api/friends/:userId` succeeds. `payload.userId` is the id of the user who initiated the removal. The recipient drops the matching row from their local friends signal.
+- Also fired by `POST /api/user-bans` to the victim when the ban severed an existing friendship (Round 6). Payload shape is unchanged; `payload.userId` is the blocker's id.
+
+#### `dm:created`
+- Payload: full `RoomDetail` with `type='dm'` and `dmPeer` populated with the OTHER participant from each recipient's POV. The server constructs two separate payloads (one per side, `dmPeer` flipped) — same per-recipient split pattern as `friend:request:accepted`.
+  ```json
+  {
+    "id": "uuid",
+    "type": "dm",
+    "name": null,
+    "description": null,
+    "visibility": "private",
+    "ownerId": null,
+    "createdAt": "ISO",
+    "memberCount": 2,
+    "dmPeer": { "userId": "uuid", "username": "bob" },
+    "members": [
+      { "roomId": "uuid", "userId": "uuid", "username": "alice", "role": "member", "joinedAt": "ISO" },
+      { "roomId": "uuid", "userId": "uuid", "username": "bob", "role": "member", "joinedAt": "ISO" }
+    ]
+  }
+  ```
+- Fired to both participants' `user:<id>` after `POST /api/dm` **creates** the DM. Idempotent upserts (DM already existed) do NOT re-broadcast — the HTTP caller receives the `200` body and that's it.
+- Before emitting, the server joins both users' existing sockets to `room:<dmRoomId>` (via `io.in('user:<id>').socketsJoin('room:<dmRoomId>')`) so the next `message:send` lands correctly without a reconnect. Same pattern as `POST /api/invitations/:id/accept`.
+
+#### `user:ban:applied`
+- Payload: `UserBanAppliedPayload`.
+  ```json
+  { "userId": "uuid" }
+  ```
+- Fired to `user:<victimId>` after `POST /api/user-bans` succeeds. `payload.userId` is the blocker's id (from the victim's POV). The victim's UI freezes the shared DM composer and renders a lock icon on the DM sidebar row.
+- **Not** fired to the blocker — they initiated the action.
+- If the ban severed a friendship, a companion `friend:removed` event (same `user:<victimId>` fan-out, same `{ userId: <blockerId> }` payload) is emitted alongside it — `FriendsService` consumes `friend:removed` independently.
+
+#### `user:ban:removed`
+- Payload: `UserBanRemovedPayload`.
+  ```json
+  { "userId": "uuid" }
+  ```
+- Fired to `user:<previouslyBannedUserId>` after `DELETE /api/user-bans/:userId` succeeds. `payload.userId` is the blocker's id. The victim's UI un-freezes the composer and drops the lock icon.
+- **Not** fired to the blocker — they initiated the action.
+- Friendship is NOT restored; no `friend:*` event fires. The previously-banned user must re-friend manually.
 
 ### Error envelope
 Connection-level failures (auth, transport) surface via socket.io's built-in `connect_error` event — the client should log and toast. Business-logic failures on `message:send` come through the ack envelope above. There is no generic `error:*` server event in Round 3.

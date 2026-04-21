@@ -15,11 +15,18 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatButtonModule } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { RoomsService } from './rooms.service';
 import { ChatContextService } from './chat-context.service';
 import { MessageListComponent } from './message-list.component';
 import { MessageComposerComponent } from './message-composer.component';
-import type { Message, RoomDetail } from '../../../../shared/types';
+import { UserBansService } from '../core/user-bans/user-bans.service';
+import {
+  BlockUserDialogComponent,
+  type BlockUserDialogData,
+} from '../core/user-bans/block-user-dialog.component';
+import type { Message, RoomDetail } from '@shared';
 
 @Component({
   selector: 'app-room-view',
@@ -29,6 +36,8 @@ import type { Message, RoomDetail } from '../../../../shared/types';
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatButtonModule,
+    MatMenuModule,
+    MatDialogModule,
     MessageListComponent,
     MessageComposerComponent,
   ],
@@ -43,6 +52,8 @@ export class RoomViewComponent implements OnDestroy {
   private readonly chatContext = inject(ChatContextService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly userBansService = inject(UserBansService);
+  private readonly dialog = inject(MatDialog);
 
   readonly loading = signal(false);
   readonly loadError = signal(false);
@@ -97,6 +108,35 @@ export class RoomViewComponent implements OnDestroy {
    */
   onMessageSent(message: Message): void {
     this.messageList?.appendMessage(message);
+  }
+
+  /**
+   * Block the DM peer via the header overflow. After success we stay on the
+   * DM page — the composer freezes and the existing history remains visible.
+   */
+  blockDmPeer(): void {
+    const current = this.room();
+    if (!current || current.type !== 'dm' || !current.dmPeer) return;
+    const peer = current.dmPeer;
+    const data: BlockUserDialogData = { username: peer.username };
+    this.dialog
+      .open<BlockUserDialogComponent, BlockUserDialogData, boolean>(BlockUserDialogComponent, {
+        width: '28rem',
+        data,
+        autoFocus: 'first-tabbable',
+        restoreFocus: true,
+      })
+      .afterClosed()
+      .subscribe((confirmed) => {
+        if (!confirmed) return;
+        this.userBansService.block(peer.userId).subscribe({
+          error: () => {
+            this.snackBar.open('Failed to block user. Please try again.', 'Dismiss', {
+              duration: 5000,
+            });
+          },
+        });
+      });
   }
 
   ngOnDestroy(): void {

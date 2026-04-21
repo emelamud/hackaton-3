@@ -42,6 +42,14 @@ if (isProduction) {
   }
 }
 
+// Comma-separated list of allowed CORS origins. Used by both the Express
+// `cors()` middleware and the Socket.io server CORS config. Defaults to the
+// local dev frontend so a blank env still works out of the box.
+const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:4300')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
+
 export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
   databaseUrl: require_env('DATABASE_URL'),
@@ -50,4 +58,5 @@ export const config = {
   jwtResetSecret,
   nodeEnv,
   uploadsDir: process.env.UPLOADS_DIR ?? '/app/uploads',
+  corsOrigins,
 } as const;

@@ -5,7 +5,7 @@ import { verifyAccessToken, type AuthPayload } from '../middleware/auth';
 import { AppError } from '../errors/AppError';
 import * as roomsService from '../services/rooms.service';
 import * as messagesService from '../services/messages.service';
-import type { MessageSendAck, SendMessagePayload } from '../types/shared';
+import type { MessageSendAck, SendMessagePayload, ServerToClientEvents } from '@shared';
 
 let ioInstance: Server | null = null;
 
@@ -14,6 +14,30 @@ export function getIo(): Server {
     throw new Error('Socket.io not initialised');
   }
   return ioInstance;
+}
+
+/**
+ * Emit a server→client event to all sockets in `user:<userId>`.
+ * Keeps event-name and payload types in lock-step with the shared contract.
+ */
+export function emitToUser<E extends keyof ServerToClientEvents>(
+  userId: string,
+  event: E,
+  payload: ServerToClientEvents[E],
+): void {
+  getIo().in(`user:${userId}`).emit(event, payload);
+}
+
+/**
+ * Emit a server→client event to all sockets in `room:<roomId>`.
+ * Keeps event-name and payload types in lock-step with the shared contract.
+ */
+export function emitToRoom<E extends keyof ServerToClientEvents>(
+  roomId: string,
+  event: E,
+  payload: ServerToClientEvents[E],
+): void {
+  getIo().in(`room:${roomId}`).emit(event, payload);
 }
 
 const sendMessageSchema = z.object({
@@ -40,10 +64,15 @@ function allowMessage(socket: Socket): boolean {
   return true;
 }
 
-export function initSocketIo(httpServer: http.Server, corsOrigin: string): Server {
+export function initSocketIo(
+  httpServer: http.Server,
+  corsOrigin: string | readonly string[],
+): Server {
   const io = new Server(httpServer, {
     cors: {
-      origin: corsOrigin,
+      // Socket.io forwards this to the underlying CORS impl; both a single
+      // string and a string[] are accepted.
+      origin: corsOrigin as string | string[],
       credentials: true,
     },
     // Well above the 3072-char message cap; blocks >1MB default that would

@@ -4,12 +4,7 @@ import { Observable, tap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { environment } from '../../../environments/environment';
 import { SocketService } from '../socket/socket.service';
-import type {
-  Invitation,
-  InvitationRevokedPayload,
-  CreateInvitationRequest,
-  RoomDetail,
-} from '../../../../../shared/types';
+import type { Invitation, CreateInvitationRequest, RoomDetail } from '@shared';
 
 /**
  * App-wide cache of the current user's pending invitations.
@@ -37,7 +32,7 @@ export class InvitationsService {
   constructor() {
     // Cold observables — subscriptions are attached for the app lifetime.
     this.socketService
-      .on<Invitation>('invitation:new')
+      .on('invitation:new')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((invite) => {
         this.pending.update((list) =>
@@ -46,7 +41,7 @@ export class InvitationsService {
       });
 
     this.socketService
-      .on<InvitationRevokedPayload>('invitation:revoked')
+      .on('invitation:revoked')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((payload) => {
         this.pending.update((list) => list.filter((i) => i.id !== payload.invitationId));

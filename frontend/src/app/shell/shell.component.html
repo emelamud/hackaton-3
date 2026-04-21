@@ -34,11 +34,10 @@
         class="shell__invitations-btn"
         [matMenuTriggerFor]="invitationsMenu"
         #invitationsTrigger="matMenuTrigger"
-        [matBadge]="invitationsService.pendingCount()"
+        [matBadge]="invitationsService.pendingCount() || null"
         matBadgeColor="primary"
         matBadgeSize="small"
         matBadgeOverlap="true"
-        [matBadgeHidden]="invitationsService.pendingCount() === 0"
         aria-label="Pending invitations"
       >
         <mat-icon>mail</mat-icon>
@@ -77,6 +76,55 @@
         </ng-template>
       </mat-menu>
 
+      <!-- Friend requests badge + dropdown -->
+      <button
+        mat-icon-button
+        type="button"
+        class="shell__friends-btn"
+        [matMenuTriggerFor]="friendsMenu"
+        #friendsTrigger="matMenuTrigger"
+        [matBadge]="friendsService.incomingCount() || null"
+        matBadgeColor="primary"
+        matBadgeSize="small"
+        matBadgeOverlap="true"
+        aria-label="Pending friend requests"
+      >
+        <mat-icon>person_add</mat-icon>
+      </button>
+
+      <mat-menu
+        #friendsMenu="matMenu"
+        class="shell__friends-menu"
+        xPosition="before"
+      >
+        <ng-template matMenuContent>
+          <header class="shell__friends-header px-4 py-3">
+            <span class="text-title-small">Friend requests</span>
+          </header>
+          <mat-divider />
+
+          @if (friendsService.incomingRequests().length === 0) {
+            <div class="shell__friends-empty px-4 py-5 gap-2">
+              <mat-icon class="text-on-surface-variant">person_add_disabled</mat-icon>
+              <p class="text-body-medium text-on-surface-variant m-0">
+                No pending friend requests
+              </p>
+            </div>
+          } @else {
+            <div class="shell__friends-list">
+              @for (request of friendsService.incomingRequests(); track request.id) {
+                <app-friend-request-item
+                  [request]="request"
+                  [busy]="isBusy(request.id)"
+                  (accept)="onAcceptFriend($event, friendsTrigger)"
+                  (reject)="onRejectFriend($event, friendsTrigger)"
+                />
+              }
+            </div>
+          }
+        </ng-template>
+      </mat-menu>
+
       <a mat-button routerLink="/sessions">
         <mat-icon>devices</mat-icon>
         Sessions
@@ -100,6 +148,11 @@
             {{ authService.currentUser()?.email }}
           </div>
         </div>
+        <mat-divider />
+        <button mat-menu-item type="button" (click)="openBlockedUsers()">
+          <mat-icon>block</mat-icon>
+          <span>Blocked users</span>
+        </button>
         <mat-divider />
         <button mat-menu-item (click)="signOut()" [disabled]="signingOut()">
           <mat-icon>logout</mat-icon>

@@ -1,0 +1,23 @@
+:host {
+  display: block;
+}
+
+.friend-request-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.friend-request-item__message {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.friend-request-item__actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}

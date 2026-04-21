@@ -1,0 +1,36 @@
+<article class="friend-request-item px-4 py-3 gap-2">
+  <div class="friend-request-item__text text-body-medium">
+    <strong>{{ request.fromUsername }}</strong>
+    <span class="text-on-surface-variant"> wants to be your friend</span>
+  </div>
+
+  @if (request.message) {
+    <blockquote class="friend-request-item__message text-body-small text-on-surface-variant px-3 py-2 border-l-outline">
+      {{ request.message }}
+    </blockquote>
+  }
+
+  <time class="friend-request-item__time text-label-small text-on-surface-variant">
+    {{ request.createdAt | date: 'medium' }}
+  </time>
+
+  <div class="friend-request-item__actions gap-2">
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="busy"
+      (click)="onAccept($event)"
+    >
+      Accept
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="busy"
+      (click)="onReject($event)"
+    >
+      Reject
+    </button>
+  </div>
+</article>

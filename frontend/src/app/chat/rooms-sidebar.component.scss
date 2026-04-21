@@ -64,3 +64,153 @@
     }
   }
 }
+
+// Section headers (Friends + DMs)
+.rooms-sidebar__friends,
+.rooms-sidebar__dms {
+  display: flex;
+  flex-direction: column;
+  border-top-width: 0.0625rem;
+  border-top-style: solid;
+  border-top-color: map.get(tokens.$ds-colors, outline-variant);
+  margin-top: 0.5rem;
+}
+
+.rooms-sidebar__section-header {
+  display: flex;
+  align-items: center;
+}
+
+.rooms-sidebar__collapse-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  line-height: 1.75rem;
+}
+
+.rooms-sidebar__section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.0625rem;
+  font-weight: 600;
+}
+
+.rooms-sidebar__count-chip {
+  border-radius: 0.75rem;
+  line-height: 1.25rem;
+  min-width: 1.25rem;
+  text-align: center;
+}
+
+.rooms-sidebar__add-friend-cta {
+  align-self: flex-start;
+}
+
+.rooms-sidebar__friend-list,
+.rooms-sidebar__outgoing-list,
+.rooms-sidebar__dm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.friend-item,
+.outgoing-item,
+.dm-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  &:hover {
+    background-color: map.get(tokens.$ds-colors, surface-container-highest);
+  }
+}
+
+.friend-item__presence,
+.dm-item__presence {
+  // Reserved slot for the presence dot that lands in Round 7.
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+}
+
+.friend-item__avatar,
+.dm-item__avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.friend-item__name,
+.outgoing-item__name,
+.dm-item__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-item__more,
+.friend-item__message,
+.dm-item__more {
+  width: 1.75rem;
+  height: 1.75rem;
+  line-height: 1.75rem;
+}
+
+.friend-item__message {
+  margin-left: auto;
+}
+
+.friend-item__more {
+  margin-left: 0.125rem;
+}
+
+.rooms-sidebar__outgoing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  width: 100%;
+  justify-content: flex-start;
+  text-transform: none;
+}
+
+// DM item — the whole row is clickable via the nested <a>.
+.dm-item__link {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+
+  &:focus-visible {
+    outline: 0.125rem solid map.get(tokens.$ds-colors, primary);
+    outline-offset: -0.125rem;
+    border-radius: 0.25rem;
+  }
+}
+
+.dm-item--active,
+.dm-item__link.dm-item--active {
+  background-color: map.get(tokens.$ds-colors, surface-container-highest);
+}
+
+.dm-item__lock {
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.dm-item--banned {
+  // Subtle dim on the whole row when the DM is banned. The name gets the
+  // `text-on-surface-variant` class inline so both sides dim together.
+  opacity: 0.75;
+}

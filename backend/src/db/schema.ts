@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   pgEnum,
@@ -36,21 +37,38 @@ export const sessions = pgTable('sessions', {
 
 export const roomVisibility = pgEnum('room_visibility', ['public', 'private']);
 export const roomRole = pgEnum('room_role', ['owner', 'admin', 'member']);
+// Round 6 — discriminator so DMs can share the `rooms` table without a
+// dedicated `dm_rooms` table. Default `'channel'` lets the migration backfill
+// pre-existing rows in a single statement.
+export const roomType = pgEnum('room_type', ['channel', 'dm']);
 
 export const rooms = pgTable(
   'rooms',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').unique().notNull(),
+    type: roomType('type').notNull().default('channel'),
+    // `name` is nullable for DMs (Round 6). Postgres treats NULLs as distinct
+    // by default, so the existing unique index still safely covers channels.
+    name: text('name').unique(),
     description: text('description'),
     visibility: roomVisibility('visibility').notNull(),
-    ownerId: uuid('owner_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    // `owner_id` is nullable for DMs (Round 6) — DMs have two `member` rows
+    // and no owner / admin concept.
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({
     nameLowerIdx: uniqueIndex('rooms_name_lower_idx').on(sql`lower(${table.name})`),
+    // DB-level invariants mirroring the task requirement: channels must carry
+    // both `name` and `owner_id`; DMs must carry neither (stored as NULL).
+    channelNameRequired: check(
+      'rooms_channel_name_required',
+      sql`(${table.type} = 'channel' AND ${table.name} IS NOT NULL) OR ${table.type} = 'dm'`,
+    ),
+    channelOwnerRequired: check(
+      'rooms_channel_owner_required',
+      sql`(${table.type} = 'channel' AND ${table.ownerId} IS NOT NULL) OR ${table.type} = 'dm'`,
+    ),
   }),
 );
 
@@ -117,6 +135,120 @@ export const invitations = pgTable(
   }),
 );
 
+export const friendships = pgTable(
+  'friendships',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    friendUserId: uuid('friend_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Symmetric two-row design (Q1 = 1b). Composite PK doubles as the
+    // `(user_id, friend_user_id)` lookup index for `GET /api/friends`.
+    pk: primaryKey({ columns: [table.userId, table.friendUserId] }),
+    // Guard against self-friendship rows at the DB level.
+    selfFriendship: check(
+      'friendships_no_self',
+      sql`${table.userId} <> ${table.friendUserId}`,
+    ),
+  }),
+);
+
+export const friendRequests = pgTable(
+  'friend_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    fromUserId: uuid('from_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    toUserId: uuid('to_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // `message` has no length constraint at the DB level — zod enforces 500 in
+    // the route layer so validation errors carry the usual envelope.
+    message: text('message'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Unordered-pair uniqueness — catches both the "resend same direction"
+    // and the "counter-request from the other side" cases with one 23505.
+    pairIdx: uniqueIndex('friend_requests_pair_idx').on(
+      sql`LEAST(${table.fromUserId}, ${table.toUserId})`,
+      sql`GREATEST(${table.fromUserId}, ${table.toUserId})`,
+    ),
+    // Backs `GET /api/friend-requests/incoming`.
+    toUserIdx: index('friend_requests_to_user_idx').on(table.toUserId),
+    // Backs `GET /api/friend-requests/outgoing`.
+    fromUserIdx: index('friend_requests_from_user_idx').on(table.fromUserId),
+  }),
+);
+
+// Round 6 — DMs live in `rooms` with `type='dm'`; this side-table stores the
+// canonicalised (user_a_id < user_b_id) pair and backs the idempotent
+// `POST /api/dm` upsert. `rooms.id` is the FK so cascading a room delete
+// cleans up the pair row too.
+export const directMessages = pgTable(
+  'direct_messages',
+  {
+    roomId: uuid('room_id')
+      .primaryKey()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    userAId: uuid('user_a_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    userBId: uuid('user_b_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Primary lookup for the upsert path: exact equality on the canonical
+    // pair. The columns are stored pre-canonicalised (min/max), so a plain
+    // btree index on (user_a_id, user_b_id) suffices — no functional
+    // LEAST/GREATEST index needed.
+    pairIdx: uniqueIndex('direct_messages_pair_idx').on(table.userAId, table.userBId),
+    noSelf: check('direct_messages_no_self', sql`${table.userAId} <> ${table.userBId}`),
+    // Defence-in-depth against a caller passing non-canonicalised values.
+    canonicalOrder: check(
+      'direct_messages_canonical_order',
+      sql`${table.userAId} < ${table.userBId}`,
+    ),
+  }),
+);
+
+// Round 6 — directional user-to-user bans. Creating a row severs friendship
+// and drops pending friend-requests in the same transaction. DM message-send
+// + DM create consult this table in either direction.
+export const userBans = pgTable(
+  'user_bans',
+  {
+    blockerUserId: uuid('blocker_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    blockedUserId: uuid('blocked_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Composite PK doubles as `GET /api/user-bans` lookup index.
+    pk: primaryKey({ columns: [table.blockerUserId, table.blockedUserId] }),
+    // Backs the "is this caller banned by anyone" / DM message-send reverse
+    // direction — `WHERE blocked_user_id = $callerId` needs a dedicated index
+    // because the composite PK only helps when `blocker_user_id` is the
+    // leading column.
+    blockedUserIdx: index('user_bans_blocked_user_idx').on(table.blockedUserId),
+    noSelf: check(
+      'user_bans_no_self',
+      sql`${table.blockerUserId} <> ${table.blockedUserId}`,
+    ),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
@@ -129,3 +261,11 @@ export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;
 export type InvitationRow = typeof invitations.$inferSelect;
 export type NewInvitationRow = typeof invitations.$inferInsert;
+export type FriendshipRow = typeof friendships.$inferSelect;
+export type NewFriendshipRow = typeof friendships.$inferInsert;
+export type FriendRequestRow = typeof friendRequests.$inferSelect;
+export type NewFriendRequestRow = typeof friendRequests.$inferInsert;
+export type DirectMessageRow = typeof directMessages.$inferSelect;
+export type NewDirectMessageRow = typeof directMessages.$inferInsert;
+export type UserBanRow = typeof userBans.$inferSelect;
+export type NewUserBanRow = typeof userBans.$inferInsert;
