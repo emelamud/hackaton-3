@@ -72,7 +72,6 @@
 }
 
 .member-row__avatar {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -82,16 +81,14 @@
   font-weight: 500;
 }
 
-.presence-dot {
-  position: absolute;
-  right: -0.125rem;
-  bottom: -0.125rem;
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 50%;
-  border-width: 0.125rem;
-  border-style: solid;
-  border-color: map.get(tokens.$ds-colors, surface-container-high);
+.member-row__title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.member-row__presence {
+  flex-shrink: 0;
 }
 
 .room-rail__placeholder {

@@ -128,10 +128,11 @@
 
 .friend-item__presence,
 .dm-item__presence {
-  // Reserved slot for the presence dot that lands in Round 7.
-  width: 0.5rem;
-  height: 0.5rem;
+  // Presence-dot slot. The host element is `<app-presence-dot>`, which sets
+  // `display: inline-flex` in its own SCSS; this rule only pins flex behavior
+  // on the row so the dot doesn't stretch or collapse.
   flex-shrink: 0;
+  align-self: center;
 }
 
 .friend-item__avatar,

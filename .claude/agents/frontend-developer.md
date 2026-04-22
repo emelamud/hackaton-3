@@ -8,6 +8,7 @@ You are a senior Angular developer.
 ## Source of truth
 - `/shared/api-contract.md` — endpoint shapes
 - `/shared/types/` — shared TS interfaces
+- For socket events, `shared/types/socket.ts` is the contract — event names and payload shapes must match. Outgoing client events are typed via `ClientToServerEvents`; incoming via `ServerToClientEvents`.
 
 Do not modify `/shared/`. Report contract changes needed.
 

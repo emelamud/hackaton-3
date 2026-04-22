@@ -162,7 +162,9 @@
                   routerLinkActive="dm-item--active"
                   class="dm-item__link gap-2"
                 >
-                  <span class="dm-item__presence" aria-hidden="true"></span>
+                  @if (room.dmPeer; as peer) {
+                    <app-presence-dot class="dm-item__presence" [userId]="peer.userId" />
+                  }
                   <span class="dm-item__avatar bg-primary text-on-primary text-label-small">
                     {{ (room.dmPeer?.username ?? '?')[0].toUpperCase() }}
                   </span>
@@ -264,7 +266,7 @@
           <ul class="rooms-sidebar__friend-list">
             @for (friend of friendsService.friends(); track friend.userId) {
               <li class="friend-item px-3 py-2 gap-2">
-                <span class="friend-item__presence" aria-hidden="true"></span>
+                <app-presence-dot class="friend-item__presence" [userId]="friend.userId" />
                 <span class="friend-item__avatar bg-primary text-on-primary text-label-small">
                   {{ friend.username[0].toUpperCase() }}
                 </span>

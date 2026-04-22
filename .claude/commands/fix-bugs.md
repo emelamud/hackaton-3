@@ -40,8 +40,8 @@ Dispatch **`frontend-tester`** with:
 
 Parse the `TIMING:` line into `T_ft_start` / `T_ft_end`.
 
-## Phase 4 — Append to `time_log.md`
-Capture `T_overall_end`. Append under `## Round N` in `time_log.md` (create `## Round N` if missing):
+## Phase 4 — Append to `plans/time_log.md`
+Capture `T_overall_end`. Append under `## Round N` in `plans/time_log.md` (create `## Round N` if missing):
 
 ```markdown
 ### Fix iteration — `/fix-bugs N` (<ISO datetime>)

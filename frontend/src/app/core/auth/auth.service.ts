@@ -17,6 +17,8 @@ import { InvitationsService } from '../invitations/invitations.service';
 import { FriendsService } from '../friends/friends.service';
 import { UserBansService } from '../user-bans/user-bans.service';
 import { DmsService } from '../dms/dms.service';
+import { PresenceService } from '../presence/presence.service';
+import { PresenceActivityService } from '../presence/presence-activity.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -30,6 +32,12 @@ export class AuthService {
   // active before the first DM arrives. The reference is retained on `this`
   // so `strict` TS tree-shaking / unused-locals lint rules don't flag it.
   protected readonly dmsService = inject(DmsService);
+  // Same eager-construction pattern: `PresenceService`'s `presence:snapshot` /
+  // `presence:update` subscriptions have to be attached before the socket
+  // connects so the first snapshot lands in the map. `PresenceActivityService`
+  // owns the own-tab activity tracker and is driven via `start()` / `stop()`.
+  protected readonly presenceService = inject(PresenceService);
+  private readonly presenceActivityService = inject(PresenceActivityService);
 
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
@@ -58,6 +66,9 @@ export class AuthService {
       this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
       this.friendsService.fetchInitial().subscribe({ error: () => undefined });
       this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+      // Presence: server pushes `presence:snapshot` on socket connect; the
+      // activity tracker starts reporting `presence:active`/`presence:idle`.
+      this.presenceActivityService.start();
     }
   }
 
@@ -101,6 +112,7 @@ export class AuthService {
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
         this.friendsService.fetchInitial().subscribe({ error: () => undefined });
         this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+        this.presenceActivityService.start();
       }),
     );
   }
@@ -114,6 +126,7 @@ export class AuthService {
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
         this.friendsService.fetchInitial().subscribe({ error: () => undefined });
         this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+        this.presenceActivityService.start();
       }),
     );
   }
@@ -145,6 +158,9 @@ export class AuthService {
           this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
           this.friendsService.fetchInitial().subscribe({ error: () => undefined });
           this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+          // Idempotent — if a prior constructor or login already started the
+          // tracker, this is a no-op.
+          this.presenceActivityService.start();
         }),
         catchError(() => {
           this.clearSession();
@@ -171,6 +187,9 @@ export class AuthService {
     this.invitationsService.pending.set([]);
     this.friendsService.reset();
     this.userBansService.reset();
+    // Stop the DOM-level activity listeners + wipe the server-sourced map.
+    this.presenceActivityService.stop();
+    this.presenceService.reset();
   }
 
   private setUserFromToken(token: string): void {

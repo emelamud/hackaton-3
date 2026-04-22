@@ -32,6 +32,7 @@ import {
   BlockUserDialogComponent,
   type BlockUserDialogData,
 } from '../core/user-bans/block-user-dialog.component';
+import { PresenceDotComponent } from '../shared/presence-dot.component';
 import type { Friend, FriendRequest, Room } from '@shared';
 
 @Component({
@@ -52,6 +53,7 @@ import type { Friend, FriendRequest, Room } from '@shared';
     MatListModule,
     MatMenuModule,
     MatBadgeModule,
+    PresenceDotComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './rooms-sidebar.component.html',

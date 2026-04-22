@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
-import type { ServerToClientEvents } from '@shared';
+import type { ClientToServerEvents, ServerToClientEvents } from '@shared';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -110,6 +110,22 @@ export class SocketService {
     for (const { event, handler } of this.listeners) {
       socket.off(event, handler);
     }
+  }
+
+  /**
+   * Typed fire-and-forget emit for payloadless client→server events.
+   *
+   * Keyed by the shared `ClientToServerEvents` contract so `presence:active` /
+   * `presence:idle` resolve at compile time and event-name typos are caught.
+   * `message:send` deliberately stays out of that contract (ad-hoc payload +
+   * ack signature) — it uses `emitWithAck` instead.
+   *
+   * Silent no-op if the socket isn't connected yet: presence transitions that
+   * land during a connection gap are self-healing because the server recomputes
+   * per-socket state on connect and emits a snapshot.
+   */
+  emit<E extends keyof ClientToServerEvents>(event: E): void {
+    this.socket?.emit(event as string);
   }
 
   /**

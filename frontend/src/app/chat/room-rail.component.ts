@@ -9,6 +9,7 @@ import {
   ManageRoomDialogComponent,
   type ManageRoomDialogData,
 } from './manage-room-dialog.component';
+import { PresenceDotComponent } from '../shared/presence-dot.component';
 import type { RoomMember } from '@shared';
 
 @Component({
@@ -20,6 +21,7 @@ import type { RoomMember } from '@shared';
     MatListModule,
     MatTooltipModule,
     MatDialogModule,
+    PresenceDotComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './room-rail.component.html',

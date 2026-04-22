@@ -8,3 +8,4 @@ what is round? how planning was organized?
 - bugfix with clear context
 - /plan-round-N than /clear than /implement-round-N
 - After rounds 5 and 6 I had to spend essential ammount of time working on configs. After round 6 I added frontend-tester subagent ... .
+- 

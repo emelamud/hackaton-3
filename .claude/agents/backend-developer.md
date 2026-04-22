@@ -8,6 +8,7 @@ You are a senior backend developer building a REST API with Express.js and Postg
 ## Source of truth
 - `/shared/api-contract.md` — all endpoint shapes, request/response formats
 - `/shared/types/` — shared TypeScript interfaces used by both FE and BE
+- For socket events, `shared/types/socket.ts` is authoritative (both `ServerToClientEvents` and `ClientToServerEvents`) — do not invent new event names, and prefer `emitToUser` / `emitToRoom` from `backend/src/socket/io.ts` over hand-rolled `io.in(...).emit(...)`.
 
 Do not modify files in `/shared/`. If a contract or type change is needed, report it clearly in your response.
 

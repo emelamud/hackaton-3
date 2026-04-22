@@ -8,8 +8,9 @@
     <header class="room-view__header px-5 py-4 border-b-outline-variant">
       <div class="room-view__title-row gap-2">
         @if (r.type === 'dm') {
-          <!-- Reserved presence-dot slot to the left of the username (Round 7). -->
-          <span class="room-view__presence" aria-hidden="true"></span>
+          @if (r.dmPeer; as peer) {
+            <app-presence-dot class="room-view__presence" [userId]="peer.userId" />
+          }
           <mat-icon class="room-view__icon text-on-surface-variant">alternate_email</mat-icon>
           <h1 class="text-title-medium m-0">{{ r.dmPeer?.username ?? '' }}</h1>
           <button

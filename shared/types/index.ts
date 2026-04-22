@@ -5,4 +5,5 @@ export * from './message';
 export * from './invitation';
 export * from './friend';
 export * from './user-ban';
+export * from './presence';
 export * from './socket';

@@ -74,9 +74,11 @@
           <mat-list-item class="member-row">
             <span matListItemAvatar class="member-row__avatar bg-primary text-on-primary text-label-small">
               {{ member.username[0]?.toUpperCase() ?? '?' }}
-              <span class="presence-dot bg-tertiary" aria-hidden="true"></span>
             </span>
-            <span matListItemTitle class="text-body-medium">{{ member.username }}</span>
+            <span matListItemTitle class="member-row__title gap-2">
+              <app-presence-dot class="member-row__presence" [userId]="member.userId" />
+              <span class="text-body-medium">{{ member.username }}</span>
+            </span>
             @if (roleLabel(member); as label) {
               <span
                 matListItemMeta

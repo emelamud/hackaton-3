@@ -736,6 +736,7 @@ Subscription state is **maintained server-side** — the client does not send `r
 
 1. Server joins the socket to `user:<userId>` (used by REST handlers to fan out to all of a user's tabs).
 2. Server joins the socket to `room:<roomId>` for every room the user is currently a member of.
+3. Server emits `presence:snapshot` directly to the newly-connected socket (not the `user:<userId>` fan-out room) with the current `online | afk | offline` state for every user in the caller's interest set (friends ∪ DM peers ∪ room co-members). See §`presence:snapshot` below. Also, the newly-connected socket starts with per-socket activity `active`; if this transition changes the user's aggregate state (e.g. they were `offline` with no sockets, now `online`), the server broadcasts `presence:update` to each user in the interest set. Round 7.
 
 REST handlers keep subscriptions in sync for the lifetime of the connection:
 - After `POST /api/rooms` (create) and `POST /api/rooms/:id/join` → server calls `io.in('user:<userId>').socketsJoin('room:<roomId>')`.
@@ -768,6 +769,26 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
     - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields
     - `{ "ok": false, "error": "Personal messaging is blocked" }` — target room has `type='dm'` and a `user_bans` row exists in either direction between the two participants (Round 6). Only fires for DMs; channel rooms never produce this ack.
 - On success the server additionally broadcasts `message:new` (see below) to everyone in `room:<roomId>` **except the sender socket**. The sender renders its own message from the ack, so the broadcast excludes it to avoid duplicates. Other tabs of the same user receive the broadcast normally (different sockets, same user).
+
+#### `presence:active`
+- Payload: none (empty event — no arguments).
+- Fired by the FE when the tab transitions from `idle` to `active` — first user interaction after an idle window, OR `document.visibilitychange → visible`.
+- Server: updates the emitting socket's per-socket state to `active`; recomputes the user's aggregate `online | afk | offline`; emits `presence:update` to the user's interest set only when the aggregate actually changes.
+- No ack. Validation is client-driven (transitions only — see §Presence rules).
+
+#### `presence:idle`
+- Payload: none (empty event — no arguments).
+- Fired by the FE when the tab transitions from `active` to `idle` — 60,000 ms elapses without a qualifying interaction event, OR `document.visibilitychange → hidden` (immediate, no wait).
+- Server: updates the emitting socket's per-socket state to `idle`; recomputes the user's aggregate; emits `presence:update` to the interest set only when the aggregate changes.
+- No ack.
+
+### Presence rules (Round 7)
+- **AFK threshold**: 60,000 ms per tab without a qualifying user-interaction event (requirement §2.2.2). Enforced client-side — the server trusts transitions.
+- **Qualifying interaction events** (client side, attached to `document`): `mousedown`, `mousemove`, `wheel`, `scroll`, `keydown`, `pointerdown`, `touchstart`. Plus `visibilitychange` (hidden → immediate `idle`; visible → immediate `active`).
+- **Server aggregation**: a user is `online` iff at least one of their connected sockets is `active`; `afk` iff ≥1 socket is connected but all are `idle`; `offline` iff no sockets are connected.
+- **Transitions only**: only aggregate-state transitions trigger a `presence:update` broadcast. A socket flipping `active → idle` while another socket of the same user is still `active` is silent on the wire.
+- **Interest set**: for a user X, `presence:update` fan-out goes to X's friends ∪ X's DM peers ∪ X's room co-members (every user who shares at least one channel or DM membership with X). X themselves are NOT in their own fan-out — the FE tracks self locally via its activity tracker.
+- **Latency**: updates should propagate end-to-end in ≤ 2 s (requirement §3.2). No artificial delays server-side.
 
 ### Server → Client events
 
@@ -880,6 +901,25 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
 - Fired to `user:<previouslyBannedUserId>` after `DELETE /api/user-bans/:userId` succeeds. `payload.userId` is the blocker's id. The victim's UI un-freezes the composer and drops the lock icon.
 - **Not** fired to the blocker — they initiated the action.
 - Friendship is NOT restored; no `friend:*` event fires. The previously-banned user must re-friend manually.
+
+#### `presence:update`
+- Payload: `PresenceUpdatePayload`.
+  ```json
+  { "userId": "uuid", "state": "online" }
+  ```
+- `state` is one of `"online" | "afk" | "offline"`.
+- Fired to `user:<interestedUserId>` for every user in the CHANGED user's interest set (friends ∪ DM peers ∪ room co-members) whenever that user's aggregate `online | afk | offline` state transitions. Fan-out is per-user via `emitToUser`.
+- **Not** fired to the changed user themselves — the FE tracks its own state locally via the activity tracker.
+- Recipients apply the update to their local presence map. The UI re-renders the ● / ◐ / ○ dot next to any sidebar row, DM header, or room member rail entry keyed on `userId`.
+
+#### `presence:snapshot`
+- Payload: `PresenceSnapshotPayload`.
+  ```json
+  { "presences": [ { "userId": "uuid", "state": "online" }, { "userId": "uuid", "state": "afk" } ] }
+  ```
+- Fired to a **single socket** (not the user fan-out `user:<id>`) immediately after it successfully connects and subscribes to its `user:` / `room:` channels. Payload contains every user in the caller's interest set, each with the current aggregate state. Users with no connected sockets are returned as `state: "offline"`.
+- Consumer semantics: the FE merges the snapshot into its local presence map — it does NOT clear pre-existing entries for userIds absent from the snapshot. New sockets opened during an already-authenticated session fold the snapshot in without dropping state from other ongoing sockets.
+- Per-socket (not per-user) so reopening a tab does not blast every other tab of the same user.
 
 ### Error envelope
 Connection-level failures (auth, transport) surface via socket.io's built-in `connect_error` event — the client should log and toast. Business-logic failures on `message:send` come through the ack envelope above. There is no generic `error:*` server event in Round 3.

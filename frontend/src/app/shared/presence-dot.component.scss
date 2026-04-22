@@ -1,0 +1,23 @@
+@use 'sass:map';
+@use 'styles/tokens' as tokens;
+
+:host {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.presence-dot {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  // Thin ring provides contrast against avatar backgrounds / hovered rows
+  // without introducing a second hard-coded color. The token indirection is
+  // the sanctioned escape hatch per DESIGN_SYSTEM.md §1 (pseudo-class /
+  // dynamic-contrast use).
+  border: 0.0625rem solid map.get(tokens.$ds-colors, surface-container-high);
+  box-sizing: border-box;
+}

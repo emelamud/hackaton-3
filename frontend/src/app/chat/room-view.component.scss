@@ -24,10 +24,10 @@
 }
 
 .room-view__presence {
-  // Reserved slot for the peer presence dot — populated in Round 7.
-  width: 0.5rem;
-  height: 0.5rem;
+  // Layout hook for the peer presence dot in the DM header. Sizing comes
+  // from the component's own styles; this rule only pins flex behavior.
   flex-shrink: 0;
+  align-self: center;
 }
 
 .room-view__loading {

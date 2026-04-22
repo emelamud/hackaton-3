@@ -57,7 +57,7 @@ Dispatch two agents **in the same message** so they run in parallel:
 When both subagents complete, capture `T_p2_end`. Parse the `TIMING:` line from each subagent's response into `T_be_start` / `T_be_end` / `T_fe_start` / `T_fe_end`. If a subagent forgot to emit the line, fall back to `T_p2_start` / `T_p2_end` for that row and note `(approx)` in the log entry's Notes field.
 
 ## Phase 3 — Frontend tester
-Ensure the frontend is running at http://localhost:4300. If not, ask the user to start it before proceeding — do not start it yourself.
+Check http://localhost:4300 with a short-timeout `curl`. If it's not responding, ask the user whether to bring the stack up with `docker compose up -d` and wait for confirmation. On "yes": run `docker compose up -d --build` in the background, then poll `curl http://localhost:4300` every few seconds until it returns 200 (cap at ~2 minutes). On "no": stop and wait for the user to start it themselves. Do not start the stack without an explicit go-ahead.
 
 Dispatch **`frontend-tester`** with:
 - Round number N
@@ -79,12 +79,12 @@ Capture `T_p4_end` and `T_overall_end` after the report is written.
 
 Stop after the report — do not auto-apply config changes.
 
-## Phase 5 — Append to `time_log.md`
-After Phase 4's report is delivered, append one implementation block to `time_log.md` at the project root.
+## Phase 5 — Append to `plans/time_log.md`
+After Phase 4's report is delivered, append one implementation block to `plans/time_log.md`.
 
 Duration formatting: `XhYmZs`, omit empty leading units (`23m44s`, `2h5m10s`, `47s`).
 
-If `time_log.md` does not exist, create it with `# Time Log` + blank line. If `## Round N` already exists (e.g. from `/plan-round`), append the implementation block under it. If not, append a fresh `## Round N` section with this block inside.
+If `plans/time_log.md` does not exist, create it with `# Time Log` + blank line. If `## Round N` already exists (e.g. from `/plan-round`), append the implementation block under it. If not, append a fresh `## Round N` section with this block inside.
 
 Template (fill in every `<…>`):
 

@@ -26,6 +26,7 @@ import {
   BlockUserDialogComponent,
   type BlockUserDialogData,
 } from '../core/user-bans/block-user-dialog.component';
+import { PresenceDotComponent } from '../shared/presence-dot.component';
 import type { Message, RoomDetail } from '@shared';
 
 @Component({
@@ -40,6 +41,7 @@ import type { Message, RoomDetail } from '@shared';
     MatDialogModule,
     MessageListComponent,
     MessageComposerComponent,
+    PresenceDotComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './room-view.component.html',

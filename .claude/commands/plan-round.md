@@ -41,11 +41,11 @@ Each file follows the structure used in `plans/round-1/orchestrator_tasks.md`:
 ## Before writing
 Ask clarifying questions if anything is ambiguous (scope cuts, library choice for a new feature, etc.). Otherwise proceed without questions.
 
-## After writing — append to `time_log.md`
+## After writing — append to `plans/time_log.md`
 1. Run `date +"%Y-%m-%d %H:%M:%S %z"` → record as `T_end`. Run `date +%s` → `T_end_epoch`.
 2. Compute `duration_seconds = T_end_epoch - T_start_epoch`. Format as `XhYmZs` (omit empty leading units — e.g. `23m44s`, `2h5m10s`, `47s`).
-3. If `time_log.md` does not exist at the project root, create it with a single `# Time Log` header line followed by a blank line.
-4. Look for an existing `## Round N` section in `time_log.md`. If absent, append one. Under it, append a `### Planning — /plan-round N` block using this exact template:
+3. If `plans/time_log.md` does not exist, create it with a single `# Time Log` header line followed by a blank line.
+4. Look for an existing `## Round N` section in `plans/time_log.md`. If absent, append one. Under it, append a `### Planning — /plan-round N` block using this exact template:
 
 ```markdown
 ### Planning — `/plan-round N`

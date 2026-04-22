@@ -5,7 +5,21 @@ import { verifyAccessToken, type AuthPayload } from '../middleware/auth';
 import { AppError } from '../errors/AppError';
 import * as roomsService from '../services/rooms.service';
 import * as messagesService from '../services/messages.service';
-import type { MessageSendAck, SendMessagePayload, ServerToClientEvents } from '@shared';
+import * as presenceService from '../services/presence.service';
+import * as presenceInterestService from '../services/presence-interest.service';
+import type {
+  MessageSendAck,
+  SendMessagePayload,
+  ServerToClientEvents,
+} from '@shared';
+
+// Round 7 — `Server` is left ungenericised on purpose. Wiring the
+// `ClientToServerEvents` / `ServerToClientEvents` generics would require us
+// to also migrate the Round-3 `message:send` ad-hoc (payload, ack) signature,
+// which sits outside the current `ClientToServerEvents` definition. The new
+// `presence:active` / `presence:idle` names still type-check at runtime
+// because socket.io matches by string; keeping the old generics avoids a
+// wide refactor for Round 7.
 
 let ioInstance: Server | null = null;
 
@@ -115,6 +129,74 @@ export function initSocketIo(
       // eslint-disable-next-line no-console
       console.error('Failed to pre-subscribe socket to rooms', err);
     }
+
+    // 3. Presence — Round 7.
+    //    - Fresh sockets start as `active`.
+    //    - Snapshot is per-SOCKET (socket.emit), NOT per-user (emitToUser) so
+    //      opening a new tab does not re-hydrate every other tab of the same user.
+    //    - The self-transition broadcast goes to the caller's interest set when
+    //      the aggregate actually changes (e.g. `offline → online` on first tab).
+    try {
+      const { changed, state } = presenceService.handleConnect(socket.id, userId);
+      const interest = await presenceInterestService.getInterestSet(userId);
+      socket.emit('presence:snapshot', {
+        presences: presenceService.snapshotForUsers(interest),
+      });
+      if (changed) {
+        for (const otherId of interest) {
+          emitToUser(otherId, 'presence:update', { userId, state });
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to initialise presence on connect', err);
+    }
+
+    // 4. Presence — disconnect handler. Removes the socket from the registry,
+    //    fan-outs the resulting aggregate change if any (e.g. last active socket
+    //    gone → `afk`, last connected socket gone → `offline`).
+    socket.on('disconnect', async () => {
+      try {
+        const { userId: uid, changed, state } = presenceService.handleDisconnect(
+          socket.id,
+        );
+        if (!uid || !changed) return;
+        const interest = await presenceInterestService.getInterestSet(uid);
+        for (const otherId of interest) {
+          emitToUser(otherId, 'presence:update', { userId: uid, state });
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to handle presence on disconnect', err);
+      }
+    });
+
+    // 5. Presence — client-driven activity transitions.
+    //    Shared body between `presence:active` and `presence:idle`; extracted
+    //    into a closure to keep both branches identical.
+    const broadcastActivity = async (activity: 'active' | 'idle'): Promise<void> => {
+      try {
+        const { userId: uid, changed, state } = presenceService.setSocketActivity(
+          socket.id,
+          activity,
+        );
+        if (!uid || !changed) return;
+        const interest = await presenceInterestService.getInterestSet(uid);
+        for (const otherId of interest) {
+          emitToUser(otherId, 'presence:update', { userId: uid, state });
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`Failed to handle presence:${activity}`, err);
+      }
+    };
+
+    socket.on('presence:active', () => {
+      void broadcastActivity('active');
+    });
+    socket.on('presence:idle', () => {
+      void broadcastActivity('idle');
+    });
 
     socket.on(
       'message:send',
