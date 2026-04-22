@@ -22,7 +22,7 @@ There implementation was done by orchestrator (launced in main agent), FE and BE
 - `bugs.md` is the hand-off between tester and a fresh-context FE dev — same pattern as `_work_summary.md` between rounds, just at bug-fix granularity.
 - Yet the closer I got to the finish line the faster I hit Claude's current session usage limit. Claude had more things to push in the context. I need to think what to do with that. Maybe it's possible to do implementation (not planning!) with Sonnet instead of Opus.
 
-Eventually, I hit limit for the last time while implementing round 10. Round 12 was implemented before (cause it was easy and I was sure I wount hit the limit while implementing it). So, rounds 10 and 11 are not implemented.
+Eventually, I hit limit for the last time while implementing round 10. The time was running out. Round 12 was implemented before (cause it was easy and I was sure I wount hit the limit while implementing it). So, rounds 10 and 11 are not implemented.
 
 ## PS
 
