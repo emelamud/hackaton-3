@@ -1,0 +1,107 @@
+<section class="public-catalog p-4 gap-4">
+  <header class="public-catalog__header gap-4">
+    <h1 class="text-headline-small m-0">Public rooms</h1>
+    <mat-form-field
+      appearance="outline"
+      class="public-catalog__search"
+      subscriptSizing="dynamic"
+    >
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Search rooms</mat-label>
+      <input matInput type="text" [formControl]="searchControl" autocomplete="off" />
+    </mat-form-field>
+  </header>
+
+  @if (loading()) {
+    <div class="public-catalog__loading gap-2 p-4">
+      <mat-progress-spinner diameter="24" mode="indeterminate" />
+      <span class="text-body-medium text-on-surface-variant">Loading rooms…</span>
+    </div>
+  } @else if (loadError()) {
+    <div
+      class="public-catalog__error bg-error-container text-on-error-container p-4 gap-2"
+    >
+      <mat-icon>error_outline</mat-icon>
+      <span class="text-body-medium">Could not load rooms.</span>
+      <button mat-stroked-button type="button" (click)="retry()">Retry</button>
+    </div>
+  } @else if (rooms().length === 0) {
+    <div class="public-catalog__empty p-6 gap-2">
+      <mat-icon class="text-on-surface-variant">search_off</mat-icon>
+      <p class="text-body-medium text-on-surface-variant m-0">
+        @if (searchControl.value) {
+          No rooms match "{{ searchControl.value }}".
+        } @else {
+          No public rooms yet. Be the first to create one.
+        }
+      </p>
+    </div>
+  } @else {
+    <ul class="public-catalog__list gap-2">
+      @for (room of rooms(); track trackById($index, room)) {
+        <li class="catalog-card bg-surface-container p-4 gap-3">
+          <div class="catalog-card__body">
+            <header class="catalog-card__head gap-2">
+              <mat-icon class="catalog-card__icon text-on-surface-variant">tag</mat-icon>
+              <h2 class="catalog-card__name text-title-small m-0">{{ room.name }}</h2>
+              <span
+                class="catalog-card__count text-label-small text-on-surface-variant ml-auto"
+              >
+                {{ room.memberCount }} member{{ room.memberCount === 1 ? '' : 's' }}
+              </span>
+            </header>
+            @if (room.description) {
+              <p class="catalog-card__desc text-body-medium text-on-surface-variant m-0">
+                {{ room.description }}
+              </p>
+            }
+          </div>
+          <footer class="catalog-card__actions gap-2">
+            @if (room.isMember) {
+              <a
+                mat-stroked-button
+                class="catalog-card__open"
+                [routerLink]="['/chat', room.id]"
+              >
+                Open
+              </a>
+            } @else {
+              <button
+                mat-flat-button
+                color="primary"
+                type="button"
+                class="catalog-card__join"
+                [disabled]="isJoining(room.id)"
+                (click)="join(room)"
+              >
+                @if (isJoining(room.id)) {
+                  <mat-progress-spinner diameter="18" mode="indeterminate" />
+                  <span>Joining…</span>
+                } @else {
+                  <span>Join</span>
+                }
+              </button>
+            }
+          </footer>
+        </li>
+      }
+    </ul>
+
+    @if (hasMore()) {
+      <button
+        mat-stroked-button
+        type="button"
+        class="public-catalog__load-more"
+        [disabled]="loadingMore()"
+        (click)="loadMore()"
+      >
+        @if (loadingMore()) {
+          <mat-progress-spinner diameter="18" mode="indeterminate" />
+          <span>Loading…</span>
+        } @else {
+          <span>Load more</span>
+        }
+      </button>
+    }
+  }
+</section>

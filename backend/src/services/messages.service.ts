@@ -4,7 +4,6 @@ import {
   attachments,
   messages,
   roomMembers,
-  rooms,
   users,
 } from '../db/schema';
 import { AppError } from '../errors/AppError';
@@ -13,28 +12,6 @@ import * as userBansService from './user-bans.service';
 import * as attachmentsService from './attachments.service';
 import { toAttachmentDto } from './attachments.service';
 import type { Attachment, Message, MessageHistoryResponse } from '@shared';
-
-async function assertRoomAndMembership(
-  userId: string,
-  roomId: string,
-): Promise<{ type: 'channel' | 'dm' }> {
-  const [room] = await db
-    .select({ id: rooms.id, type: rooms.type })
-    .from(rooms)
-    .where(eq(rooms.id, roomId))
-    .limit(1);
-
-  if (!room) {
-    throw new AppError('Room not found', 404);
-  }
-
-  const isMember = await roomsService.isRoomMember(userId, roomId);
-  if (!isMember) {
-    throw new AppError('Not a room member', 403);
-  }
-
-  return { type: room.type as 'channel' | 'dm' };
-}
 
 export async function persistMessage(
   userId: string,
@@ -55,7 +32,7 @@ export async function persistMessage(
     throw new AppError('Body must be between 1 and 3072 characters', 400);
   }
 
-  const { type } = await assertRoomAndMembership(userId, roomId);
+  const { type } = await roomsService.assertRoomMembership(userId, roomId);
 
   // Round 6 — DM-ban gate. Only fires for DMs; channel rooms skip the lookup
   // entirely per Q7/Q9 (channel conversations are never gated on user-bans).
@@ -162,7 +139,7 @@ export async function listMessageHistory(
   roomId: string,
   params: { before?: string; limit: number },
 ): Promise<MessageHistoryResponse> {
-  await assertRoomAndMembership(userId, roomId);
+  await roomsService.assertRoomMembership(userId, roomId);
 
   // 1) Resolve cursor — both (id, roomId) must match so a valid UUID that
   //    belongs to a different room still 400s (never leaks existence).

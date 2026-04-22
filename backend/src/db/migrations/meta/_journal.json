@@ -57,6 +57,13 @@
       "when": 1776845914798,
       "tag": "0007_unknown_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776859938515,
+      "tag": "0008_robust_vargas",
+      "breakpoints": true
     }
   ]
 }

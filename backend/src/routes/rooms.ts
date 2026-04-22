@@ -4,7 +4,9 @@ import { validate, validateParams, validateQuery } from '../middleware/validate'
 import { requireAuth } from '../middleware/auth';
 import * as roomsService from '../services/rooms.service';
 import * as messagesService from '../services/messages.service';
-import { emitToRoom, getIo } from '../socket/io';
+import * as unreadService from '../services/unread.service';
+import * as catalogService from '../services/catalog.service';
+import { emitToRoom, emitToUser, getIo } from '../socket/io';
 
 export const roomsRouter = Router();
 
@@ -38,6 +40,22 @@ const messageHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+// Round 12 — public-channel catalog. `q` is an optional substring search
+// (max 64 after trim); empty-string-after-trim collapses to `undefined` so
+// the service skips the ILIKE predicate entirely. `cursor` is the id of the
+// last row in a previous page (a public channel); the service validates it
+// resolves to `type='channel' AND visibility='public'`.
+const catalogQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 // GET /api/rooms
 roomsRouter.get(
   '/',
@@ -62,6 +80,22 @@ roomsRouter.post(
       // so they receive `message:new` without reconnecting.
       getIo().in(`user:${req.user!.id}`).socketsJoin(`room:${result.id}`);
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/rooms/catalog — MUST register BEFORE `GET /:id`, otherwise Express
+// matches `/catalog` as `:id` and this handler never fires.
+roomsRouter.get(
+  '/catalog',
+  validateQuery(catalogQuerySchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const params = req.query as unknown as z.infer<typeof catalogQuerySchema>;
+      const result = await catalogService.listPublicCatalog(req.user!.id, params);
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }
@@ -128,6 +162,24 @@ roomsRouter.post(
       await roomsService.leaveRoom(req.user!.id, req.params.id);
       getIo().in(`user:${req.user!.id}`).socketsLeave(`room:${req.params.id}`);
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/rooms/:id/read — Round 12. UPSERT the caller's read cursor to
+// server `now()` with GREATEST-based monotonic advancement, then fan out
+// `room:read` to the caller's own sockets (multi-tab sync). No cross-user
+// broadcast — unread state is strictly per-user.
+roomsRouter.post(
+  '/:id/read',
+  validateParams(idSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await unreadService.markRoomRead(req.user!.id, req.params.id);
+      emitToUser(req.user!.id, 'room:read', result);
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

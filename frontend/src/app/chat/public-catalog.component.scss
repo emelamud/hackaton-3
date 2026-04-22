@@ -1,0 +1,99 @@
+:host {
+  display: block;
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.public-catalog {
+  display: flex;
+  flex-direction: column;
+}
+
+.public-catalog__header {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.public-catalog__search {
+  flex: 1;
+  min-width: 16rem;
+  max-width: 32rem;
+}
+
+.public-catalog__loading,
+.public-catalog__error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  border-radius: 0.75rem;
+}
+
+.public-catalog__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.public-catalog__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.catalog-card {
+  display: flex;
+  align-items: center;
+  border-radius: 0.75rem;
+}
+
+.catalog-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.catalog-card__head {
+  display: flex;
+  align-items: center;
+}
+
+.catalog-card__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-card__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.catalog-card__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.public-catalog__load-more {
+  align-self: center;
+}
+
+// Below md (56.5rem) — stack the card body above the action button.
+@media (max-width: 56.5rem) {
+  .catalog-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catalog-card__actions {
+    justify-content: flex-end;
+  }
+}

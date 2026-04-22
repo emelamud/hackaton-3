@@ -10,6 +10,7 @@ import type {
 } from './friend';
 import type { UserBanAppliedPayload, UserBanRemovedPayload } from './user-ban';
 import type { PresenceUpdatePayload, PresenceSnapshotPayload } from './presence';
+import type { RoomReadPayload } from './unread';
 
 export interface ServerToClientEvents {
   'message:new': Message;
@@ -26,6 +27,7 @@ export interface ServerToClientEvents {
   'user:ban:removed': UserBanRemovedPayload;
   'presence:update': PresenceUpdatePayload;
   'presence:snapshot': PresenceSnapshotPayload;
+  'room:read': RoomReadPayload;
 }
 
 export type ServerToClientEvent = keyof ServerToClientEvents;

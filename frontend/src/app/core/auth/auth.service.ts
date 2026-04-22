@@ -20,6 +20,7 @@ import { DmsService } from '../dms/dms.service';
 import { PresenceService } from '../presence/presence.service';
 import { PresenceActivityService } from '../presence/presence-activity.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { UnreadService } from '../unread/unread.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -43,6 +44,13 @@ export class AuthService {
   // `AttachmentsService` owns a blob + object-URL cache that must be revoked
   // from `clearSession()` to prevent cross-session URL leaks.
   private readonly attachmentsService = inject(AttachmentsService);
+  // Round 12: the unread counter also needs to be live before the first
+  // `message:new` arrives so its socket subscriptions can bump per-room
+  // counts. `initialize()` seeds the map from `GET /api/unread`. The caller's
+  // user id is pushed into `UnreadService` via `setCurrentUserId()` after
+  // every `currentUser.set()` call below, so `UnreadService` itself does not
+  // need to inject `AuthService` (keeps the DI graph acyclic).
+  private readonly unreadService = inject(UnreadService);
 
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
@@ -66,11 +74,13 @@ export class AuthService {
     if (!this.currentUser()) this.hydrateFromStorage();
     // If a token survived a reload (in storage), connect the socket now.
     if (this.accessToken) {
+      this.unreadService.setCurrentUserId(this.currentUser()?.id ?? null);
       this.socketService.connect(this.accessToken);
       // Seed pending invitations + friends + bans state for the restored session.
       this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
       this.friendsService.fetchInitial().subscribe({ error: () => undefined });
       this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+      this.unreadService.initialize().subscribe({ error: () => undefined });
       // Presence: server pushes `presence:snapshot` on socket connect; the
       // activity tracker starts reporting `presence:active`/`presence:idle`.
       this.presenceActivityService.start();
@@ -113,10 +123,12 @@ export class AuthService {
         this.selectStorage(payload.keepSignedIn ?? false);
         this.setAccessToken(res.accessToken);
         this.currentUser.set(res.user);
+        this.unreadService.setCurrentUserId(res.user.id);
         this.socketService.connect(res.accessToken);
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
         this.friendsService.fetchInitial().subscribe({ error: () => undefined });
         this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+        this.unreadService.initialize().subscribe({ error: () => undefined });
         this.presenceActivityService.start();
       }),
     );
@@ -127,10 +139,12 @@ export class AuthService {
       tap((res) => {
         this.setAccessToken(res.accessToken);
         this.currentUser.set(res.user);
+        this.unreadService.setCurrentUserId(res.user.id);
         this.socketService.connect(res.accessToken);
         this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
         this.friendsService.fetchInitial().subscribe({ error: () => undefined });
         this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+        this.unreadService.initialize().subscribe({ error: () => undefined });
         this.presenceActivityService.start();
       }),
     );
@@ -154,6 +168,7 @@ export class AuthService {
         tap((res) => {
           this.setAccessToken(res.accessToken);
           this.setUserFromToken(res.accessToken);
+          this.unreadService.setCurrentUserId(this.currentUser()?.id ?? null);
           // On silent refresh during app boot, ensure the socket is connected.
           // Mid-session refreshes do not reconnect — see Round 3 summary.
           if (!this.socketService.isConnected()) {
@@ -163,6 +178,7 @@ export class AuthService {
           this.invitationsService.fetchInitial().subscribe({ error: () => undefined });
           this.friendsService.fetchInitial().subscribe({ error: () => undefined });
           this.userBansService.fetchInitial().subscribe({ error: () => undefined });
+          this.unreadService.initialize().subscribe({ error: () => undefined });
           // Idempotent — if a prior constructor or login already started the
           // tracker, this is a no-op.
           this.presenceActivityService.start();
@@ -192,6 +208,7 @@ export class AuthService {
     this.invitationsService.pending.set([]);
     this.friendsService.reset();
     this.userBansService.reset();
+    this.unreadService.reset();
     // Stop the DOM-level activity listeners + wipe the server-sourced map.
     this.presenceActivityService.stop();
     this.presenceService.reset();

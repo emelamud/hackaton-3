@@ -63,6 +63,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./sessions/sessions.component').then((m) => m.SessionsComponent),
       },
+      {
+        path: 'public-rooms',
+        loadComponent: () =>
+          import('./chat/public-catalog.component').then((m) => m.PublicCatalogComponent),
+      },
     ],
   },
   {

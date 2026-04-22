@@ -7,4 +7,6 @@ export * from './invitation';
 export * from './friend';
 export * from './user-ban';
 export * from './presence';
+export * from './unread';
+export * from './catalog';
 export * from './socket';

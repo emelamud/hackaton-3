@@ -289,6 +289,36 @@ export async function isRoomMember(userId: string, roomId: string): Promise<bool
   return Boolean(row);
 }
 
+/**
+ * Assert the room exists and the caller is a current member.
+ *
+ * Round 12: lifted out of `messages.service.ts` so the same gate backs the
+ * mark-read endpoint (`unread.service.ts`) and any future per-room mutation.
+ * Error strings are contract-load-bearing — do not change without coordinating
+ * with the history / message-send / mark-read wire spec.
+ */
+export async function assertRoomMembership(
+  userId: string,
+  roomId: string,
+): Promise<{ type: 'channel' | 'dm' }> {
+  const [room] = await db
+    .select({ id: rooms.id, type: rooms.type })
+    .from(rooms)
+    .where(eq(rooms.id, roomId))
+    .limit(1);
+
+  if (!room) {
+    throw new AppError('Room not found', 404);
+  }
+
+  const member = await isRoomMember(userId, roomId);
+  if (!member) {
+    throw new AppError('Not a room member', 403);
+  }
+
+  return { type: room.type as 'channel' | 'dm' };
+}
+
 export async function patchRoom(
   userId: string,
   roomId: string,

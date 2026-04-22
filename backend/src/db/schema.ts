@@ -265,6 +265,31 @@ export const attachments = pgTable(
   }),
 );
 
+// Round 12 — per-user, per-room read cursor. The composite `(user_id, room_id)`
+// PK doubles as the UPSERT conflict target AND the hot-path lookup index for
+// `GET /api/unread`. `last_read_at` uses `withTimezone: true` to match the
+// newer columns (attachments.createdAt etc.); the older tables' naked
+// `timestamp` is an inconsistency we are not fixing this round.
+// No `last_read_message_id` — the cursor is a timestamp, not a message FK
+// (a deleted message must not orphan the cursor).
+export const roomReadCursors = pgTable(
+  'room_read_cursors',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    lastReadAt: timestamp('last_read_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.roomId] }),
+  }),
+);
+
 // Round 6 — directional user-to-user bans. Creating a row severs friendship
 // and drops pending friend-requests in the same transaction. DM message-send
 // + DM create consult this table in either direction.
@@ -316,3 +341,5 @@ export type UserBanRow = typeof userBans.$inferSelect;
 export type NewUserBanRow = typeof userBans.$inferInsert;
 export type AttachmentRow = typeof attachments.$inferSelect;
 export type NewAttachmentRow = typeof attachments.$inferInsert;
+export type RoomReadCursorRow = typeof roomReadCursors.$inferSelect;
+export type NewRoomReadCursorRow = typeof roomReadCursors.$inferInsert;

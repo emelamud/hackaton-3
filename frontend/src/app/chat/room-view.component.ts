@@ -11,6 +11,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { switchMap } from 'rxjs';
+import { SocketService } from '../core/socket/socket.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -22,6 +23,7 @@ import { ChatContextService } from './chat-context.service';
 import { MessageListComponent } from './message-list.component';
 import { MessageComposerComponent } from './message-composer.component';
 import { UserBansService } from '../core/user-bans/user-bans.service';
+import { UnreadService } from '../core/unread/unread.service';
 import {
   BlockUserDialogComponent,
   type BlockUserDialogData,
@@ -52,9 +54,11 @@ export class RoomViewComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly roomsService = inject(RoomsService);
   private readonly chatContext = inject(ChatContextService);
+  private readonly socketService = inject(SocketService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
   private readonly userBansService = inject(UserBansService);
+  private readonly unreadService = inject(UnreadService);
   private readonly dialog = inject(MatDialog);
 
   readonly loading = signal(false);
@@ -64,6 +68,11 @@ export class RoomViewComponent implements OnDestroy {
   @ViewChild(MessageListComponent) messageList?: MessageListComponent;
 
   constructor() {
+    // Round 12: `paramMap` is an observable stream, so this fires both on
+    // first enter AND on `/chat/<A>` → `/chat/<B>` swaps where Angular reuses
+    // the RoomViewComponent instance (same route, new param). `setActiveRoom`
+    // follows the latest id; `UnreadService` debounces the accompanying
+    // mark-read POST so rapid swaps don't spam the server.
     this.route.paramMap
       .pipe(
         switchMap((params) => {
@@ -72,6 +81,7 @@ export class RoomViewComponent implements OnDestroy {
           this.loadError.set(false);
           this.room.set(null);
           this.chatContext.clear();
+          this.unreadService.setActiveRoom(id);
           return this.roomsService.get(id);
         }),
         takeUntilDestroyed(this.destroyRef),
@@ -100,6 +110,23 @@ export class RoomViewComponent implements OnDestroy {
             });
           }
         },
+      });
+
+    // Round 12: listen for live `message:new` events for the currently-open
+    // room and re-mark it read. `MessageListComponent` handles its own append
+    // subscription independently; this subscription is a side-effect only
+    // (no append). `UnreadService.onLiveMessageInActiveRoom` debounces the
+    // POST internally. Subscribe to the raw socket stream unfiltered and
+    // gate on `this.room().id` at emission time so room-swaps don't leak
+    // stale mark-read calls.
+    this.socketService
+      .on('message:new')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((msg) => {
+        const current = this.room();
+        if (current && msg.roomId === current.id) {
+          this.unreadService.onLiveMessageInActiveRoom(msg.roomId);
+        }
       });
   }
 
@@ -143,5 +170,6 @@ export class RoomViewComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.chatContext.clear();
+    this.unreadService.setActiveRoom(null);
   }
 }

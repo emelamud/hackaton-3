@@ -170,6 +170,8 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 | POST | `/api/rooms/:id/leave` | — | `204` | `403` owner cannot leave, `404` not a member |
 | GET | `/api/rooms/:id/messages` | `?before=<messageId>&limit=<1..100>` | `200 MessageHistoryResponse` (oldest-first page + `hasMore`) | `400` invalid cursor / validation, `403` not a member, `404` not found |
 | PATCH | `/api/rooms/:id` | `PatchRoomRequest` | `200 RoomDetail` + `room:updated` broadcast | `400` empty body / validation, `403` not owner/admin, `404` not found, `409` name taken |
+| POST | `/api/rooms/:id/read` | — | `200 MarkRoomReadResponse` + `room:read` emitted to caller | `403` not a member, `404` not found |
+| GET | `/api/rooms/catalog` | `?q=&cursor=&limit=` | `200 PublicCatalogResponse` | `400` invalid cursor / validation |
 
 ---
 
@@ -817,6 +819,112 @@ Emits `user:ban:removed` to `user:<:userId>` with payload `{ userId: <callerId> 
 
 ---
 
+## Unread Endpoints
+
+All unread endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Unread count is per user per room, computed at read time from `messages.created_at > COALESCE(cursor.last_read_at, member.joined_at)` and `messages.user_id <> caller`. The caller's own messages are never counted.
+- `POST /api/rooms/:id/read` is the single mutation path — it UPSERTs the cursor to `GREATEST(existing.last_read_at, now())`. Rapid repeated calls are safe and monotonic.
+- Cursor rows are stored for channels AND DMs; the same `room_read_cursors(user_id, room_id)` table serves both.
+- Leaving a room does NOT delete the cursor; rejoining restarts unread accrual from the stored `last_read_at`. Room delete (future round) cascades the cursor via FK.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| GET | `/api/unread` | — | `200 UnreadCount[]` (one entry per member room with `unreadCount > 0` OR a cursor row; entries with 0 may be omitted — FE treats absence as 0) | — |
+| POST | `/api/rooms/:id/read` | — | `200 MarkRoomReadResponse` + `room:read` emitted to `user:<callerId>` | `403` not a room member, `404` room not found |
+
+---
+
+### GET `/api/unread`
+List the caller's per-room unread counts. The server MAY omit rooms whose computed count is 0 to keep the payload small; the FE treats absence as 0. (Returning all rooms is also acceptable — this is a perf detail, not a wire contract change.)
+
+**Success** `200` — `UnreadCount[]`:
+```json
+[
+  { "roomId": "uuid", "unreadCount": 7, "lastReadAt": "2026-04-22T10:00:00.000Z" },
+  { "roomId": "uuid", "unreadCount": 2, "lastReadAt": null }
+]
+```
+
+`lastReadAt` is `null` when no cursor row exists yet; the effective cursor is the caller's `room_members.joined_at` for that room.
+
+---
+
+### POST `/api/rooms/:id/read`
+Mark the room read up to server `now()`. UPSERT into `room_read_cursors`; `last_read_at = GREATEST(existing, now())` so out-of-order calls (e.g. from a lagging tab) never rewind the cursor.
+
+**Success** `200` — `MarkRoomReadResponse`:
+```json
+{ "roomId": "uuid", "lastReadAt": "2026-04-22T12:34:56.789Z" }
+```
+
+Also emits `room:read` with the same `{ roomId, lastReadAt }` to `user:<callerId>` — all the caller's live sockets (other tabs / devices) receive it and clear their local badge.
+
+**Errors**:
+- `403` — caller is not a current member: `{ "error": "Not a room member" }`.
+- `404` — room not found: `{ "error": "Room not found" }`.
+
+Idempotent: calling after a successful mark-read returns the same `lastReadAt` (since `GREATEST(existing, now()) = now()` only if `now()` has advanced; otherwise returns the stored value).
+
+---
+
+## Public Room Catalog
+
+Requires `Authorization: Bearer <accessToken>` and returns `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Returns public channels only: `rooms.type='channel' AND rooms.visibility='public'`. Private rooms and DMs are never included (requirement §2.4.4).
+- Paginated newest-first by `(createdAt DESC, id DESC)`. Stable tie-break on `id`.
+- `q` filters with `name ILIKE '%q%' OR description ILIKE '%q%'` (case-insensitive substring).
+- Response carries `isMember` per row so the FE can render "Open" vs "Join" without a second lookup.
+- Joining from the catalog reuses the existing `POST /api/rooms/:id/join` — no dedicated catalog-join endpoint.
+- The catalog is pull-based — no socket event fires when a public room is created; callers refresh manually.
+
+### Summary
+
+| Method | Path | Query | Success | Errors |
+|--------|------|-------|---------|--------|
+| GET | `/api/rooms/catalog` | `?q=<0..64>&cursor=<roomId>&limit=<1..50>` | `200 PublicCatalogResponse` | `400` invalid cursor / validation |
+
+---
+
+### GET `/api/rooms/catalog`
+**Query params**:
+- `q` — optional, trimmed, 0–64 characters. Empty/absent → no search filter.
+- `cursor` — optional UUID. Id of the last row returned by a previous page; server resolves it to `(createdAt, id)` and filters `(rooms.createdAt, rooms.id) < (cursor.createdAt, cursor.id)`.
+- `limit` — optional integer, default 20, min 1, max 50.
+
+**Success** `200` — `PublicCatalogResponse`:
+```json
+{
+  "rooms": [
+    {
+      "id": "uuid",
+      "name": "engineering",
+      "description": "Backend + frontend discussions",
+      "memberCount": 12,
+      "createdAt": "ISO",
+      "isMember": false
+    }
+  ],
+  "hasMore": true,
+  "nextCursor": "uuid"
+}
+```
+
+Ordering is `createdAt DESC, id DESC` — newest public channels first.
+
+`nextCursor` is the id of the LAST (oldest) row in the returned page when `hasMore=true`, else `null`. Pass it unchanged as `?cursor=` on the next request. Asymmetric with `MessageHistoryResponse` (which does not echo a cursor) — the catalog emits it explicitly because the next-cursor derivation from the row shape is less obvious than on the history pane.
+
+**Errors**:
+- `400` — validation error on `q` (too long) / `limit` (out-of-range) / `cursor` (malformed UUID): `{ "error": "Validation failed", "details": [...] }`.
+- `400` — `cursor` UUID does not match a public-channel room (unknown id, private, or DM): `{ "error": "Invalid cursor" }`. (Round 9 reserved this verbatim string on the history endpoint; reusing it here is safe — the FE differentiates by route.)
+
+---
+
 ## Socket Events
 
 Socket.io v4 channel for real-time messaging. Runs on the same HTTP server as Express.
@@ -1038,6 +1146,14 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
 - Fired to a **single socket** (not the user fan-out `user:<id>`) immediately after it successfully connects and subscribes to its `user:` / `room:` channels. Payload contains every user in the caller's interest set, each with the current aggregate state. Users with no connected sockets are returned as `state: "offline"`.
 - Consumer semantics: the FE merges the snapshot into its local presence map — it does NOT clear pre-existing entries for userIds absent from the snapshot. New sockets opened during an already-authenticated session fold the snapshot in without dropping state from other ongoing sockets.
 - Per-socket (not per-user) so reopening a tab does not blast every other tab of the same user.
+
+#### `room:read`
+- Payload: `RoomReadPayload`.
+  ```json
+  { "roomId": "uuid", "lastReadAt": "ISO" }
+  ```
+- Fired to `user:<callerId>` after `POST /api/rooms/:id/read` succeeds. All the caller's live sockets receive it; the initiating tab's optimistic update makes the echo a no-op, other tabs clear the badge.
+- **Not** fired to other users. Unread state is strictly per-user.
 
 ### Error envelope
 Connection-level failures (auth, transport) surface via socket.io's built-in `connect_error` event — the client should log and toast. Business-logic failures on `message:send` come through the ack envelope above. There is no generic `error:*` server event in Round 3.

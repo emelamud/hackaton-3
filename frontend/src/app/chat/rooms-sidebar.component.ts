@@ -24,6 +24,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { RoomsService } from './rooms.service';
 import { CreateRoomDialogComponent } from './create-room-dialog.component';
 import { FriendsService } from '../core/friends/friends.service';
+import { UnreadService } from '../core/unread/unread.service';
 import { AddFriendDialogComponent } from '../core/friends/add-friend-dialog.component';
 import { RemoveFriendDialogComponent } from '../core/friends/remove-friend-dialog.component';
 import { DmsService } from '../core/dms/dms.service';
@@ -63,6 +64,7 @@ export class RoomsSidebarComponent implements OnInit {
   private readonly roomsService = inject(RoomsService);
   protected readonly friendsService = inject(FriendsService);
   protected readonly userBansService = inject(UserBansService);
+  protected readonly unreadService = inject(UnreadService);
   private readonly dmsService = inject(DmsService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -271,6 +273,15 @@ export class RoomsSidebarComponent implements OnInit {
 
   isBanned(userId: string): boolean {
     return this.userBansService.isBanned(userId);
+  }
+
+  /**
+   * Unread count lookup for `[matBadge]`. Returns `null` when zero so the
+   * badge is hidden entirely (passing `0` would render a "0" dot). The lookup
+   * dereferences the signal so change detection re-runs when counts mutate.
+   */
+  unreadBadge(roomId: string): number | null {
+    return this.unreadService.unreadByRoomId().get(roomId) ?? null;
   }
 
   private markRemoving(id: string, busy: boolean): void {

@@ -58,9 +58,17 @@
                 <mat-icon matListItemIcon class="room-item__icon text-on-surface-variant"
                   >tag</mat-icon
                 >
-                <span matListItemTitle class="room-item__name text-body-medium">{{
-                  room.name ?? ''
-                }}</span>
+                <span
+                  matListItemTitle
+                  class="room-item__name text-body-medium"
+                  [matBadge]="unreadBadge(room.id)"
+                  matBadgeColor="primary"
+                  matBadgeSize="small"
+                  matBadgeOverlap="false"
+                  matBadgePosition="after"
+                  [matBadgeHidden]="unreadBadge(room.id) === null"
+                  >{{ room.name ?? '' }}</span
+                >
                 <span
                   matListItemMeta
                   class="room-item__count text-label-small text-on-surface-variant"
@@ -91,9 +99,17 @@
                 <mat-icon matListItemIcon class="room-item__icon text-on-surface-variant"
                   >lock</mat-icon
                 >
-                <span matListItemTitle class="room-item__name text-body-medium">{{
-                  room.name ?? ''
-                }}</span>
+                <span
+                  matListItemTitle
+                  class="room-item__name text-body-medium"
+                  [matBadge]="unreadBadge(room.id)"
+                  matBadgeColor="primary"
+                  matBadgeSize="small"
+                  matBadgeOverlap="false"
+                  matBadgePosition="after"
+                  [matBadgeHidden]="unreadBadge(room.id) === null"
+                  >{{ room.name ?? '' }}</span
+                >
                 <span
                   matListItemMeta
                   class="room-item__count text-label-small text-on-surface-variant"
@@ -173,6 +189,12 @@
                     [class.text-on-surface-variant]="
                       room.dmPeer && isBanned(room.dmPeer.userId)
                     "
+                    [matBadge]="unreadBadge(room.id)"
+                    matBadgeColor="primary"
+                    matBadgeSize="small"
+                    matBadgeOverlap="false"
+                    matBadgePosition="after"
+                    [matBadgeHidden]="unreadBadge(room.id) === null"
                   >
                     {{ room.dmPeer?.username ?? '' }}
                   </span>
