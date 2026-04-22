@@ -43,11 +43,11 @@ docker-compose.yml
 - For frontend tasks, delegate to the **frontend-developer** subagent
 - For backend tasks, delegate to the **backend-developer** subagent
 - Run FE and BE tasks in parallel when they are independent
-- shared folder (containing contracts and types) should be changed by orcestrator agent, either FE or BE developer **cannot** touch it
+- shared folder (containing contracts and types) should be changed by orcestrator agent, either FE or BE developer **cannot** touch it (details are contained in description of `/plan-round` and `/implement-round` comands)
 
 ## Linting & Formatting
 - Follow the ESLint and Prettier configuration files in each subproject
 - All code must pass linting before being considered complete
 
 ## Ignore List
-Ignore (unless told otherwise) thoughts.md and contents of prompts folder 
+Completelly ignore (unless told otherwise) THE_STORY.md and contents of prompts folder! 

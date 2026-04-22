@@ -1,0 +1,1 @@
+The whole thing is launchable with `docker compose up`. **THE_STORY.md** contains some thoughts on this AI-coding session, it's handwritten... almost.
