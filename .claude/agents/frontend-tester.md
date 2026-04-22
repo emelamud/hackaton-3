@@ -49,6 +49,9 @@ Per run:
 
 End with `## Summary` line: counts per status.
 
+## Cleanup
+Playwright screenshots default to the project root. Before you finish, delete every `*.png` you created in the repo root (`rm *.png` from the project root, or remove them individually by name). Do not leave screenshots behind — the report in `bugs.md` is the deliverable, not the images.
+
 ## Bounded effort
 Cover what the dev claims shipped. Don't chase edge cases beyond the exercise steps.
 
