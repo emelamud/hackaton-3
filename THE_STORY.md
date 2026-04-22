@@ -34,4 +34,8 @@ Eventually, I hit limit for the last time while implementing round 10. Round 12 
 
 4. I should think of what skill might have helped me.
 
+5. In general, I believe that approach with FE and BE devs running independently is a good choice. 
+
 I implemented hook to log my prompts to Claude. But looks like it didn't worked properly. There some large prompts in 'prompts' folder if that is interesting.
+
+PS. Please forgive for mistakes in this story, I wanted to write it myself, not with Claude.
