@@ -10,42 +10,139 @@
     [formGroup]="form"
     (ngSubmit)="onSubmit()"
     novalidate
-    class="composer gap-2 p-3 bg-surface-container-low border-t-outline-variant"
+    class="composer p-3 bg-surface-container-low border-t-outline-variant"
   >
-    <mat-form-field appearance="outline" class="composer__field">
-      <mat-label>Message</mat-label>
-      <textarea
-        #textarea
-        matInput
-        cdkTextareaAutosize
-        #autosize="cdkTextareaAutosize"
-        cdkAutosizeMinRows="1"
-        cdkAutosizeMaxRows="8"
-        formControlName="body"
-        maxlength="3072"
-        (keydown)="onKeydown($event)"
-        placeholder="Write a message — Enter to send, Shift+Enter for a new line"
-      ></textarea>
-      @if (serverError()) {
-        <mat-error>{{ serverError() }}</mat-error>
-      } @else if (form.controls.body.hasError('maxlength') && form.controls.body.touched) {
-        <mat-error>Message must be at most 3072 characters</mat-error>
-      }
-    </mat-form-field>
+    @if (pendingAttachments().length > 0) {
+      <div class="composer__rail gap-2 mb-2">
+        @for (entry of pendingAttachments(); track trackByLocalId($index, entry)) {
+          <div
+            class="composer__chip bg-surface-container p-2 gap-1"
+            [class.composer__chip--error]="entry.uploadError"
+          >
+            <div class="composer__chip-head gap-2">
+              @if (entry.previewObjectUrl; as url) {
+                <img
+                  [src]="url"
+                  [alt]="entry.file.name"
+                  class="composer__thumb"
+                />
+              } @else {
+                <div class="composer__thumb composer__thumb--file bg-surface-container-high">
+                  <mat-icon class="text-on-surface-variant">insert_drive_file</mat-icon>
+                </div>
+              }
+              <span class="composer__filename text-label-medium" [attr.title]="entry.file.name">
+                {{ entry.file.name }}
+              </span>
+              <button
+                mat-icon-button
+                type="button"
+                class="composer__chip-remove"
+                aria-label="Remove attachment"
+                [disabled]="submitting()"
+                (click)="removePending(entry.localId)"
+              >
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
 
-    <button
-      mat-icon-button
-      color="primary"
-      type="submit"
-      class="composer__send"
-      [disabled]="submitting()"
-      aria-label="Send message"
-    >
-      @if (submitting()) {
-        <mat-progress-spinner diameter="20" mode="indeterminate" />
-      } @else {
-        <mat-icon>send</mat-icon>
-      }
-    </button>
+            @if (
+              submitting() &&
+              !entry.uploadError &&
+              entry.serverAttachmentId === null
+            ) {
+              <mat-progress-bar
+                mode="determinate"
+                [value]="entry.uploadProgress * 100"
+              />
+            }
+
+            @if (entry.uploadError) {
+              <span class="composer__chip-error text-label-small text-error">
+                {{ entry.uploadError }}
+              </span>
+            }
+
+            <input
+              matInput
+              type="text"
+              class="composer__chip-comment text-body-small"
+              [formControl]="entry.commentControl"
+              placeholder="Add a comment (optional)"
+              maxlength="200"
+              [disabled]="submitting()"
+            />
+          </div>
+        }
+      </div>
+    }
+
+    <div class="composer__row gap-2">
+      <button
+        mat-icon-button
+        type="button"
+        class="composer__attach"
+        [disabled]="attachDisabled()"
+        aria-label="Attach files"
+        (click)="triggerFilePicker()"
+      >
+        <mat-icon>attach_file</mat-icon>
+      </button>
+      <input
+        #fileInput
+        type="file"
+        multiple
+        hidden
+        (change)="onFilesPicked($event)"
+      />
+
+      <mat-form-field appearance="outline" class="composer__field">
+        <mat-label>Message</mat-label>
+        <textarea
+          #textarea
+          matInput
+          cdkTextareaAutosize
+          #autosize="cdkTextareaAutosize"
+          cdkAutosizeMinRows="1"
+          cdkAutosizeMaxRows="8"
+          formControlName="body"
+          maxlength="3072"
+          (keydown)="onKeydown($event)"
+          (paste)="onPaste($event)"
+          placeholder="Write a message — Enter to send, Shift+Enter for a new line"
+        ></textarea>
+        @if (serverError()) {
+          <mat-error>{{ serverError() }}</mat-error>
+        } @else if (form.controls.body.hasError('maxlength') && form.controls.body.touched) {
+          <mat-error>Message must be at most 3072 characters</mat-error>
+        }
+      </mat-form-field>
+
+      <button
+        mat-icon-button
+        color="primary"
+        type="submit"
+        class="composer__send"
+        [disabled]="submitting() || hasUploadErrors()"
+        [matTooltip]="hasUploadErrors() ? 'Remove failed attachments to send' : ''"
+        aria-label="Send message"
+      >
+        @if (submitting()) {
+          <mat-progress-spinner diameter="20" mode="indeterminate" />
+        } @else {
+          <mat-icon>send</mat-icon>
+        }
+      </button>
+    </div>
+
+    @if (dragActive()) {
+      <div
+        class="composer__drop-overlay bg-primary-container text-on-primary-container border-primary gap-2 p-4"
+        aria-hidden="true"
+      >
+        <mat-icon>cloud_upload</mat-icon>
+        <span class="text-body-medium">Drop files to attach</span>
+      </div>
+    }
   </form>
 }

@@ -21,9 +21,18 @@ export class MessagesService {
    * Send a message via socket ack. Resolves with the persisted `Message`
    * from the server on success; errors with an `Error` whose `message`
    * is the verbatim ack error string from the contract.
+   *
+   * Round 8: an optional `attachmentIds` array is forwarded to the server so
+   * the pending attachments (previously uploaded via `POST /api/attachments`)
+   * get atomically committed with the message row. Callers that don't attach
+   * anything pass the default and the payload matches the pre-Round-8 shape
+   * exactly.
    */
-  send(roomId: string, body: string): Observable<Message> {
+  send(roomId: string, body: string, attachmentIds?: string[]): Observable<Message> {
     const payload: SendMessagePayload = { roomId, body };
+    if (attachmentIds && attachmentIds.length > 0) {
+      payload.attachmentIds = attachmentIds;
+    }
     return from(
       this.socketService.emitWithAck<SendMessagePayload, MessageSendAck>('message:send', payload),
     ).pipe(

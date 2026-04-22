@@ -24,7 +24,16 @@
               {{ m.createdAt | date: 'shortTime' }}
             </time>
           </header>
-          <p class="message-list__body text-body-medium m-0">{{ m.body }}</p>
+          @if (m.body) {
+            <p class="message-list__body text-body-medium m-0">{{ m.body }}</p>
+          }
+          @if (m.attachments?.length) {
+            <div class="message-list__attachments gap-2 mt-1">
+              @for (att of m.attachments; track att.id) {
+                <app-message-attachment [att]="att" (loaded)="onAttachmentLoaded()" />
+              }
+            </div>
+          }
         </article>
       }
     }

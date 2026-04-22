@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+.message-attachment {
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-attachment--image {
+  // Images open in a new tab on click — the anchor is the clickable surface.
+  text-decoration: none;
+  display: inline-block;
+}
+
+.message-attachment--placeholder {
+  // 4px grid for width/height is satisfied by utility padding; custom geometry
+  // is only the content-box shape of the placeholder card.
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  min-width: 12rem;
+  min-height: 4rem;
+}
+
+// The `max` dims come straight from the task file — keep the message pane
+// readable even with 3 MB images. Object-fit contain preserves aspect ratio.
+.message-attachment__image {
+  max-width: 24rem;
+  max-height: 18rem;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  display: block;
+}
+
+.message-attachment--file {
+  max-width: 100%;
+}
+
+.message-attachment__filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 18rem;
+}
+
+.message-attachment__comment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -220,6 +220,51 @@ export const directMessages = pgTable(
   }),
 );
 
+// Round 8 — attachments. One row per uploaded file. Starts as `pending`
+// (invisible to the chat UI); flips to `attached` with `message_id` set
+// inside the same transaction as the `messages` insert via the
+// `message:send` handler. Dual FKs cascade on room / message delete —
+// on-disk files are NOT unlinked by the cascade (future rounds must
+// `DELETE … RETURNING storage_path` and `fs.unlink` explicitly).
+export const attachments = pgTable(
+  'attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    uploaderId: uuid('uploader_id')
+      .notNull()
+      .references(() => users.id),
+    messageId: uuid('message_id').references(() => messages.id, {
+      onDelete: 'cascade',
+    }),
+    filename: text('filename').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    kind: text('kind', { enum: ['image', 'file'] }).notNull(),
+    comment: text('comment'),
+    storagePath: text('storage_path').notNull(),
+    status: text('status', { enum: ['pending', 'attached'] })
+      .notNull()
+      .default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    attachedAt: timestamp('attached_at', { withTimezone: true }),
+  },
+  (table) => ({
+    // Backs the Round 9 pagination batch-load
+    // (SELECT … WHERE message_id = ANY($ids) AND status='attached').
+    attachmentsMessageIdx: index('attachments_message_idx').on(table.messageId),
+    // Partial index for the orphan-sweep cron — keeps the scan cheap without
+    // bloating the main hot path (`status='attached'` rows dominate).
+    attachmentsPendingSweepIdx: index('attachments_pending_sweep_idx')
+      .on(table.status, table.createdAt)
+      .where(sql`status = 'pending'`),
+  }),
+);
+
 // Round 6 — directional user-to-user bans. Creating a row severs friendship
 // and drops pending friend-requests in the same transaction. DM message-send
 // + DM create consult this table in either direction.
@@ -269,3 +314,5 @@ export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type NewDirectMessageRow = typeof directMessages.$inferInsert;
 export type UserBanRow = typeof userBans.$inferSelect;
 export type NewUserBanRow = typeof userBans.$inferInsert;
+export type AttachmentRow = typeof attachments.$inferSelect;
+export type NewAttachmentRow = typeof attachments.$inferInsert;

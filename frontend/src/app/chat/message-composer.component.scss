@@ -1,9 +1,16 @@
 :host {
   display: block;
   flex: 0 0 auto;
+  position: relative;
 }
 
 .composer {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.composer__row {
   display: flex;
   align-items: flex-end;
 }
@@ -20,6 +27,7 @@
   min-width: 0;
 }
 
+.composer__attach,
 .composer__send {
   flex: 0 0 auto;
 }
@@ -28,4 +36,94 @@
 // so the composer row has a consistent, dense height when there's no error.
 .composer__field ::ng-deep .mat-mdc-form-field-subscript-wrapper:empty {
   display: none;
+}
+
+.composer__rail {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.composer__chip {
+  display: flex;
+  flex-direction: column;
+  width: 14rem;
+  max-width: 100%;
+  border-radius: 0.5rem;
+}
+
+.composer__chip--error {
+  // 0.125rem outline flags the chip as errored without swapping the
+  // background utility — lets the error text below reuse the role tokens.
+  outline: 0.125rem solid;
+  outline-offset: 0;
+  outline-color: currentColor;
+  color: inherit;
+}
+
+.composer__chip-head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.composer__thumb {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.25rem;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.composer__thumb--file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.composer__filename {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__chip-remove {
+  flex: 0 0 auto;
+}
+
+.composer__chip-comment {
+  width: 100%;
+  border: 0.0625rem solid;
+  border-color: currentColor;
+  color: inherit;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font: inherit;
+}
+
+.composer__chip-comment:focus {
+  outline: none;
+  border-width: 0.125rem;
+}
+
+.composer__chip-error {
+  line-height: 1.25;
+}
+
+// Drop-target highlight overlay — painted on top of the composer while the
+// user is dragging a file over it. Pointer-events: none so the underlying
+// drop handler still sees the drop event.
+.composer__drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  border-radius: 0.5rem;
+  border-style: dashed;
+  border-width: 0.125rem;
+  opacity: 0.92;
 }

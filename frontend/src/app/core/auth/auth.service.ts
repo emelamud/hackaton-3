@@ -19,6 +19,7 @@ import { UserBansService } from '../user-bans/user-bans.service';
 import { DmsService } from '../dms/dms.service';
 import { PresenceService } from '../presence/presence.service';
 import { PresenceActivityService } from '../presence/presence-activity.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -38,6 +39,10 @@ export class AuthService {
   // owns the own-tab activity tracker and is driven via `start()` / `stop()`.
   protected readonly presenceService = inject(PresenceService);
   private readonly presenceActivityService = inject(PresenceActivityService);
+  // Eager-construction parity with the other session-scoped services above.
+  // `AttachmentsService` owns a blob + object-URL cache that must be revoked
+  // from `clearSession()` to prevent cross-session URL leaks.
+  private readonly attachmentsService = inject(AttachmentsService);
 
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
@@ -190,6 +195,9 @@ export class AuthService {
     // Stop the DOM-level activity listeners + wipe the server-sourced map.
     this.presenceActivityService.stop();
     this.presenceService.reset();
+    // Revoke every live `blob:` URL so the next user can't resolve URLs
+    // minted for the previous session's attachments.
+    this.attachmentsService.reset();
   }
 
   private setUserFromToken(token: string): void {

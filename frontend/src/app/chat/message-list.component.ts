@@ -17,6 +17,7 @@ import { DatePipe } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MessagesService } from './messages.service';
+import { MessageAttachmentComponent } from './message-attachment.component';
 import type { Message } from '@shared';
 
 /** Distance-from-bottom (rem) inside which we auto-scroll on new messages. */
@@ -25,7 +26,7 @@ const STICK_TO_BOTTOM_THRESHOLD_REM = 5; // ~80 px at 16 px root
 @Component({
   selector: 'app-message-list',
   standalone: true,
-  imports: [DatePipe, MatProgressSpinnerModule, MatIconModule],
+  imports: [DatePipe, MatProgressSpinnerModule, MatIconModule, MessageAttachmentComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './message-list.component.html',
   styleUrl: './message-list.component.scss',
@@ -115,6 +116,19 @@ export class MessageListComponent implements OnInit, OnChanges, AfterViewChecked
     this.wasAtBottomBeforeAppend = this.isNearBottom();
     this.messages.update((list) => [...list, message]);
     if (this.wasAtBottomBeforeAppend) {
+      this.pendingScrollToBottom = true;
+    }
+  }
+
+  /**
+   * Called from `MessageAttachmentComponent` when an inline image finishes
+   * loading its byte stream. Images resolve async (via `blob:` URL), which
+   * can change the rendered height of a message row AFTER the initial paint.
+   * If the user was anchored to the bottom, re-pin to the bottom on the
+   * next view check.
+   */
+  onAttachmentLoaded(): void {
+    if (this.isNearBottom()) {
       this.pendingScrollToBottom = true;
     }
   }

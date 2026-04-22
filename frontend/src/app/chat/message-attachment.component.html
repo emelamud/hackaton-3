@@ -1,0 +1,44 @@
+@if (att().kind === 'image') {
+  @if (objectUrl(); as url) {
+    <a
+      class="message-attachment message-attachment--image"
+      [href]="url"
+      target="_blank"
+      rel="noopener"
+      [attr.aria-label]="'Open ' + att().filename + ' in a new tab'"
+    >
+      <img
+        [src]="url"
+        [alt]="att().filename"
+        class="message-attachment__image"
+        (load)="onImageLoad()"
+      />
+    </a>
+  } @else {
+    <div
+      class="message-attachment message-attachment--placeholder bg-surface-container p-4 gap-2"
+      [attr.aria-label]="att().filename"
+    >
+      <mat-icon class="text-on-surface-variant">image</mat-icon>
+      <span class="text-label-small text-on-surface-variant">Loading…</span>
+    </div>
+  }
+} @else {
+  <a
+    mat-stroked-button
+    class="message-attachment message-attachment--file gap-2"
+    [href]="objectUrl() ?? '#'"
+    [download]="att().filename"
+    [attr.aria-disabled]="objectUrl() ? null : 'true'"
+    [attr.aria-label]="'Download ' + att().filename"
+  >
+    <mat-icon>attach_file</mat-icon>
+    <span class="message-attachment__filename text-body-medium">{{ att().filename }}</span>
+    <span class="text-label-small text-on-surface-variant">{{ formattedSize() }}</span>
+  </a>
+}
+@if (att().comment; as comment) {
+  <p class="message-attachment__comment text-body-small text-on-surface-variant m-0 mt-1">
+    {{ comment }}
+  </p>
+}

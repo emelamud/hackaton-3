@@ -27,6 +27,8 @@ services:
       - backend/.env
     environment:
       DATABASE_URL: postgresql://chat:chat@postgres:5432/chat
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,3 +45,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

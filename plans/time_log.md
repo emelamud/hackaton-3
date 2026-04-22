@@ -46,3 +46,27 @@
 | Wrap-up + review        | orchestrator        | 09:24:59 | 09:25:48 | 49s      | ✅ |
 
 - Notes: Clean round. Zero bugs logged (`plans/round-7/bugs.md`: Open=0, Fixed=0, Verified=0). BE smoke 12/12 with raw payloads captured; FE lint+build+typecheck clean, zero design-system token violations. Between FE dev completion (09:05:12) and tester start (09:12:09) the main orchestrator had to bring the Docker stack up — updated `.claude/commands/implement-round.md` Phase 3 so future rounds offer to `docker compose up -d --build` after user consent instead of just asking and waiting. Only non-ship deviations: BE declined to widen the `Server<CTS, STC>` generic (would drag `message:send` into scope); FE shipped with `bg-outline`/`bg-surface-dim` per `DESIGN_SYSTEM.md §2` rather than the task-file sketch's token names.
+
+## Round 8
+
+### Planning — `/plan-round 8`
+- Started:  2026-04-22 10:46:55 +0300
+- Finished: 2026-04-22 11:06:54 +0300
+- Wall time: 20m0s
+- Output: `plans/round-8/{orchestrator,backend,frontend}_tasks.md` (+ `planning_qa.md` for decision rationale)
+- Notes: User-supplied planning prompt at `prompts/plan-round-8.md` asked three questions (filesystem storage? how does FE fetch images? HTML sanitization for inline images?). Answered each in `plans/round-8/planning_qa.md` and surfaced seven follow-up decisions; user resolved six (upload-first, cap 5 attachments per message, per-attachment comment in scope per requirements §2.6.3, new-tab full-size viewer, `MessageSendAck.message.attachments?` extension approved, volume choice delegated). Picked named volume `uploads_data` (parity with `postgres_data`). Locked design: upload-first → `message:send { attachmentIds }` → atomic commit in a single transaction. Blob-cache + object-URL lifecycle on FE; no `innerHTML`, no `bypassSecurityTrust*`, no Markdown. 1-hour orphan sweep via `setInterval`. 19-scenario BE smoke harness spec'd covering happy-path, DM ban gate (upload + download), lost-access cleanup, over-cap attachmentIds, wrong-room / wrong-uploader / already-attached, magic-byte sniff, and orphan sweep.
+
+### Implementation — `/implement-round 8`
+- Started:  2026-04-22 11:08:15 +0300
+- Finished: 2026-04-22 12:21:50 +0300
+- Wall time: 1h13m35s
+
+| Phase                   | Agent               | Start    | End      | Duration      | Status |
+|-------------------------|---------------------|----------|----------|---------------|--------|
+| Shared types + contract | orchestrator        | 11:08:15 | 11:11:37 | 3m22s         | ✅ |
+| Backend impl            | backend-developer   | 11:15:25 | 11:32:45 | 17m20s        | ✅ |
+| Frontend impl           | frontend-developer  | 11:15:59 | 11:26:52 | 10m53s        | ✅ |
+| Frontend test           | frontend-tester     | 11:33:12 | 12:19:50 | 46m38s (approx) | ⚠️ |
+| Wrap-up + review        | orchestrator        | 12:20:13 | 12:21:50 | 1m37s         | ✅ |
+
+- Notes: BE shipped clean — 19/19 smoke scenarios produced the expected payloads (raw JSON captured per-scenario in the summary). FE shipped clean — `pnpm lint` / `pnpm build` / `tsc --noEmit` all clean; design-system spot-check zero hits on `#hex`, `var(--mat-sys`, `px`, inline `style=`, `bypassSecurityTrust*`, `innerHTML`. Tester run **incomplete**: 8 / 12 UI scenarios verified (PASS — image upload, file upload, DND, paste, 5-cap + snackbar overflow, remove, per-attachment comment, size-cap failure); 4 unverified (attachment-only send, real-time broadcast to second user, DM ban gate, logout lifecycle, scroll anchoring on async image load) after Playwright MCP held a stale Chrome user-data-dir lock the tester couldn't clear. `bugs.md` logs `Open=0` with a documented coverage-gap section. Tester TIMING line never emitted (killed mid-run); end timestamp recorded at orchestrator kill time (`(approx)` flag). BE wire-layer smoke scenarios #15, #2, #16, #17, #19 cover the server side of every unverified UI case, so the risk surface for the gap is the UI binding, not the contract. Recommended next action: `/fix-bugs 8` or a fresh `frontend-tester` pass to close the UI coverage. Two BE judgement calls to flag for potential contract follow-up: (a) duplicate `attachmentIds` in one send rejected as `"Invalid attachment reference"` — worth noting explicitly in the contract; (b) `Content-Disposition` uses modern-only `filename*=UTF-8''…` with no legacy fallback.

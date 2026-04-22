@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import http from 'node:http';
+import fs from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -16,9 +17,11 @@ import {
 } from './routes/friends';
 import { dmRouter } from './routes/dm';
 import { userBansRouter } from './routes/user-bans';
+import { attachmentsRouter } from './routes/attachments';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimit';
 import { initSocketIo } from './socket/io';
+import * as attachmentsService from './services/attachments.service';
 import { config } from './config';
 
 const app = express();
@@ -63,12 +66,41 @@ app.use('/api/friend-requests', friendRequestsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/dm', dmRouter);
 app.use('/api/user-bans', userBansRouter);
+app.use('/api/attachments', attachmentsRouter);
 
 app.use(errorHandler);
 
 const httpServer = http.createServer(app);
 initSocketIo(httpServer, config.corsOrigins);
 
-httpServer.listen(config.port, () => {
-  console.log(`Backend running on port ${config.port}`);
-});
+// Prepare the uploads volume BEFORE accepting connections — first-run case
+// where the named volume is empty and no `<yyyy>/<mm>` dirs exist yet; this
+// also fails fast (startup crash, not first-upload 500) if the path is
+// unwriteable. No-op when the volume already has files.
+async function start(): Promise<void> {
+  await fs.promises.mkdir(config.uploadsDir, { recursive: true });
+  console.log(`Uploads directory ready at ${config.uploadsDir}`);
+
+  // Round 8 — orphan sweep. Run once at startup (so a restart doesn't
+  // delay cleanup up to 10 min), then on a fixed 10-minute interval.
+  // Errors are logged and swallowed — a sweep failure must not crash the
+  // process.
+  const runSweep = async (): Promise<void> => {
+    try {
+      const { deletedCount } = await attachmentsService.sweepPendingAttachments();
+      if (deletedCount > 0) {
+        console.log(`Attachment sweep: deleted ${deletedCount} orphan(s)`);
+      }
+    } catch (err) {
+      console.warn('Attachment sweep failed', err);
+    }
+  };
+  void runSweep();
+  setInterval(() => void runSweep(), 10 * 60 * 1000);
+
+  httpServer.listen(config.port, () => {
+    console.log(`Backend running on port ${config.port}`);
+  });
+}
+
+void start();

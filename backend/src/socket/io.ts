@@ -57,6 +57,11 @@ export function emitToRoom<E extends keyof ServerToClientEvents>(
 const sendMessageSchema = z.object({
   roomId: z.string().uuid(),
   body: z.string(),
+  // Round 8 — optional. Each id must be a UUID; the max-5 rule is enforced
+  // DOWNSTREAM by `commitAttachmentsToMessage` so it produces the contract-
+  // exact `Invalid attachment reference` ack string instead of the
+  // `Invalid payload` bucket that malformed-shape failures share.
+  attachmentIds: z.array(z.string().uuid()).optional(),
 });
 
 // Per-socket token bucket for `message:send`: 5 messages/sec refill, burst 10.
@@ -218,10 +223,12 @@ export function initSocketIo(
           }
 
           const body = parsed.data.body.trim();
+          const attachmentIds = parsed.data.attachmentIds ?? [];
           const message = await messagesService.persistMessage(
             userId,
             parsed.data.roomId,
             body,
+            attachmentIds,
           );
 
           ack({ ok: true, message });

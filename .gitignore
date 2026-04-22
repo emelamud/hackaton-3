@@ -38,3 +38,6 @@ shared/types/*.js
 
 # Per-round smoke harness installs
 tmp/**/node_modules/
+
+# Local-only manual test fixtures (attachment samples, etc.)
+test-fixtures/

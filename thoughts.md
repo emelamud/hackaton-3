@@ -7,5 +7,5 @@ what is round? how planning was organized?
 - after unsuccessfull attempt to pass through round 2 and 3, decided to split each round into smaller parts, which was a right descision! 
 - bugfix with clear context
 - /plan-round-N than /clear than /implement-round-N
-- After rounds 5 and 6 I had to spend essential ammount of time working on configs. After round 6 I added frontend-tester subagent ... .
-- 
+- After rounds 5 and 6 I had to spend essential ammount of time working on configs. After round 6 I added frontend-tester subagent. Why? PlaywrightMCP adds huuuge amount of stuff in context! After QA round done in FE dev subagent there could be more than 200K. I've noticed that fixing bugs after that is extremely uneffective! After round 6 I told FE dev to write code only (having detailed instructions after planning), check that it's buildable and than stop producing all artifacts. Then frontend-tester steps in, reports bug and those are tried to be fixed by a FE dev with a clear context. 
+- After round 7. Taking testing to a separate context was definitelly a good move. However, there's another issue. Playwright MCP still eats a huge amount of tokens. I'm getting closer to hit the current limit. Tried to switch QA to Sonnet (instead of more expensive Opus). QA agent has instructions from FE, so it's not going to do any "smart" work. Cheaper model should be ok!

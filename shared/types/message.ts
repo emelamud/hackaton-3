@@ -1,3 +1,5 @@
+import type { Attachment } from './attachment';
+
 export interface Message {
   id: string;
   roomId: string;
@@ -5,11 +7,13 @@ export interface Message {
   username: string;
   body: string;
   createdAt: string;
+  attachments?: Attachment[];
 }
 
 export interface SendMessagePayload {
   roomId: string;
   body: string;
+  attachmentIds?: string[];
 }
 
 export type MessageSendAck =

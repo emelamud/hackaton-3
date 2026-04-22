@@ -648,6 +648,90 @@ Upsert a direct-message room between the caller and `toUserId`. Idempotent: if t
 
 ---
 
+## Attachment Endpoints
+
+All attachment endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- **Upload-first flow** (Round 8). The FE uploads each file via `POST /api/attachments` and receives an `attachmentId`. Sending is still driven by the `message:send` socket event — its payload now accepts an optional `attachmentIds?: string[]`. The server atomically commits pending attachments (flipping `status='pending' → 'attached'` and setting `message_id`) inside the same transaction that inserts the `messages` row.
+- **Size caps** (requirement §3.4): 20 MB for non-image files, 3 MB for images. Exceeding either → `413 { "error": "File exceeds size limit" }`. The 413 (not 400) matches `multer`'s `LIMIT_FILE_SIZE` behaviour at the transport layer.
+- **MIME whitelist for the `image` slot**: `image/png`, `image/jpeg`, `image/gif`, `image/webp`. All other MIMEs are accepted as `kind='file'` up to the 20 MB cap (requirement §2.6.1 — "arbitrary file types"). Missing / empty `Content-Type` on the uploaded part → `400 { "error": "Unsupported file type" }`.
+- **Magic-byte sniff**: for declared image MIMEs the server validates the first bytes match the declared format; mismatch → `400 { "error": "File content does not match declared type" }`. For non-image uploads this check is skipped (arbitrary types can't be reliably sniffed).
+- Each uploaded row starts `status='pending'` and is invisible to any chat UI until committed. A committed row (`status='attached'`) persists until the parent message or room is deleted.
+- **Orphan sweep**: pending attachments older than 1 hour are deleted server-side (row + on-disk file) by a background job (`setInterval`, 10 min cadence, also runs once at startup). No client-visible behaviour; documented so future rounds don't assume pending rows are durable.
+- **Room-membership gate on download**: the caller must be a current member of the attachment's `roomId`. Former members lose read access (requirements §2.6.4 / §2.6.5) — even for attachments they originally uploaded.
+- **DM ban gate on upload**: when the target room is `type='dm'` and an active `user_bans` row exists between the two participants (either direction), `POST /api/attachments` returns `403 { "error": "Personal messaging is blocked" }` — identical string to the `message:send` ack (Round 6), so the FE can reuse the same frozen-composer UX.
+- **DM ban gate does NOT apply to downloads**: previously-uploaded attachments in a DM remain readable to both participants after a ban, consistent with the "existing personal message history remains visible but frozen" semantics of requirement §2.3.5.
+- **Per-attachment comment** (requirement §2.6.3): optional; max 200 chars (trimmed; empty-after-trim stored as `null`). Captured at upload time; not editable in Round 8.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| POST | `/api/attachments` | `multipart/form-data` — field `file` (required) + `roomId` (required, UUID) + optional `comment` | `201 UploadAttachmentResponse` | `400` missing file / unsupported type / magic-byte mismatch / validation, `403` not a room member / DM blocked, `404` room not found, `413` file too large |
+| GET | `/api/attachments/:id` | — | `200` binary stream with `Content-Disposition` | `403` caller is not a current member of the attachment's `roomId`, `404` attachment not found |
+
+---
+
+### POST `/api/attachments`
+Upload a single file. Multipart form fields:
+- `file` — required, binary, exactly one.
+- `roomId` — required, UUID. Must identify a room the caller is a current member of.
+- `comment` — optional, string, trimmed, 0–200 chars.
+
+**Success** `201` — `UploadAttachmentResponse`:
+```json
+{
+  "attachment": {
+    "id": "uuid",
+    "roomId": "uuid",
+    "uploaderId": "uuid",
+    "filename": "spec-v3.pdf",
+    "mimeType": "application/pdf",
+    "sizeBytes": 142354,
+    "kind": "file",
+    "comment": "latest requirements",
+    "createdAt": "ISO"
+  }
+}
+```
+
+The pending row persists for 1 hour or until committed via `message:send`, whichever comes first.
+
+**Errors** (evaluated in this order — clients rely on the order to pick the correct UX string):
+- `401` — missing / invalid / expired access token.
+- `413` — file exceeds size limit (either the 20 MB global cap, hit by `multer`, OR the 3 MB image sub-cap evaluated after MIME resolution): `{ "error": "File exceeds size limit" }`.
+- `400` — missing file: `{ "error": "File is required" }`.
+- `400` — body validation error (malformed `roomId`, oversize `comment`): `{ "error": "...", "details": [...] }`.
+- `404` — `roomId` does not exist: `{ "error": "Room not found" }`.
+- `403` — caller is not a current member of the room: `{ "error": "Forbidden" }`.
+- `403` — target room is a DM and a `user_bans` row exists in either direction: `{ "error": "Personal messaging is blocked" }`.
+- `400` — unsupported file type (missing / empty `Content-Type` part): `{ "error": "Unsupported file type" }`.
+- `400` — image magic-byte mismatch: `{ "error": "File content does not match declared type" }`.
+
+---
+
+### GET `/api/attachments/:id`
+Stream the attachment bytes. Caller must be a current member of `attachment.roomId`.
+
+**Response headers**:
+- `Content-Type: <attachment.mimeType>`
+- `Content-Length: <attachment.sizeBytes>`
+- `Content-Disposition: inline; filename*=UTF-8''<rfc5987-encoded>` when `kind='image'`; `Content-Disposition: attachment; filename*=UTF-8''<rfc5987-encoded>` otherwise.
+- `X-Content-Type-Options: nosniff`
+- `Cache-Control: private, max-age=0, must-revalidate`
+
+**Body**: raw bytes from disk. No `Range:` header support — single-shot 200 only.
+
+**Errors**:
+- `401` — missing / invalid / expired access token.
+- `404` — attachment row not found: `{ "error": "Attachment not found" }`.
+- `403` — caller is not a current member of `attachment.roomId`: `{ "error": "Forbidden" }`.
+
+The membership check runs BEFORE the file open, so a 403 never leaks disk I/O. If the on-disk file is missing at stream time (race with the orphan sweep), the response ends truncated.
+
+---
+
 ## User Ban Endpoints
 
 All user-ban endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
@@ -750,24 +834,41 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
 #### `message:send`
 - Payload (`SendMessagePayload`):
   ```json
-  { "roomId": "uuid", "body": "hello team" }
+  { "roomId": "uuid", "body": "hello team", "attachmentIds": ["uuid", "uuid"] }
   ```
 - **An ack callback is required** — the server always invokes it.
 - Validation:
-  - `body` is a string; trimmed length must be 1–3072 characters (requirement §2.5.2 — 3 KB max).
+  - `body` is a string; trimmed length must be 0–3072 characters. Must satisfy: `body.trim().length >= 1` OR `attachmentIds.length >= 1` (at least one of text body or attachments is required — requirement §2.5.2 — 3 KB max for body text).
   - `roomId` is a UUID.
   - Caller must be a member of the room.
+  - **Round 8**: `attachmentIds` is optional; when present, each id must be a UUID, at most 5 ids per send, and each id must refer to a row with `status='pending'`, `uploader_id = caller`, `room_id = payload.roomId`. Any of those mismatches fails the send (see `Invalid attachment reference` ack below).
 - Ack (`MessageSendAck`):
   - Success:
     ```json
-    { "ok": true, "message": { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "alice", "body": "hello team", "createdAt": "ISO" } }
+    {
+      "ok": true,
+      "message": {
+        "id": "uuid",
+        "roomId": "uuid",
+        "userId": "uuid",
+        "username": "alice",
+        "body": "hello team",
+        "createdAt": "ISO",
+        "attachments": [
+          { "id": "uuid", "roomId": "uuid", "uploaderId": "uuid", "filename": "pic.png", "mimeType": "image/png", "sizeBytes": 123, "kind": "image", "comment": null, "createdAt": "ISO" }
+        ]
+      }
+    }
     ```
+    `message.attachments` is populated when the send referenced `attachmentIds`; omitted otherwise (matches the optional field on the shared `Message` type).
   - Failure (specific strings — must match verbatim so clients can assert on them):
-    - `{ "ok": false, "error": "Body must be between 1 and 3072 characters" }`
+    - `{ "ok": false, "error": "Body must be between 1 and 3072 characters" }` — covers empty-body-AND-no-attachments sends as well as over-length body.
     - `{ "ok": false, "error": "Not a room member" }`
     - `{ "ok": false, "error": "Room not found" }`
-    - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields
+    - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields / non-array `attachmentIds`.
+    - `{ "ok": false, "error": "Invalid attachment reference" }` — Round 8; any `attachmentIds` validation failure (wrong uploader, wrong room, already attached, unknown id, more than 5 ids). Single generic string — the client cannot usefully distinguish the sub-cases.
     - `{ "ok": false, "error": "Personal messaging is blocked" }` — target room has `type='dm'` and a `user_bans` row exists in either direction between the two participants (Round 6). Only fires for DMs; channel rooms never produce this ack.
+- **Round 8**: on success the server atomically flips each referenced attachment's `status` to `'attached'` and sets `message_id` in the same transaction that inserts the `messages` row. Partial failure inside the transaction rolls back the message insert; the pending rows stay `pending` and the orphan sweep eventually cleans them.
 - On success the server additionally broadcasts `message:new` (see below) to everyone in `room:<roomId>` **except the sender socket**. The sender renders its own message from the ack, so the broadcast excludes it to avoid duplicates. Other tabs of the same user receive the broadcast normally (different sockets, same user).
 
 #### `presence:active`
@@ -797,6 +898,7 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
   ```json
   { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "bob", "body": "hey", "createdAt": "ISO" }
   ```
+- Round 8: `message.attachments` (array of `Attachment`) is populated whenever the original `message:send` referenced one or more attachment ids. Absent for attachment-less messages — keeping the field optional preserves wire parity with pre-Round-8 smoke assertions.
 - Fired to all sockets in `room:<roomId>` **except the sender socket** (`socket.to('room:<roomId>').emit(...)`). Clients are subscribed to every room they belong to, so they must filter by `roomId` when deciding which room's pane to render into.
 
 #### `invitation:new`
