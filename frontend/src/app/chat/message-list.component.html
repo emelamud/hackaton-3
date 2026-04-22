@@ -37,22 +37,151 @@
       </div>
     } @else {
       @for (m of messages(); track trackById($index, m)) {
-        <article class="message-list__row gap-1 py-2">
+        <article
+          class="message-list__row gap-1 py-2"
+          [attr.data-message-id]="m.id"
+          [class.message-list__row--editing]="editingMessageId() === m.id"
+        >
+          @if (m.replyTo !== undefined) {
+            @if (m.replyTo === null) {
+              <div
+                class="message-list__reply-quote message-list__reply-quote--deleted gap-2 p-2 bg-surface-container-low border-l-outline-variant text-on-surface-variant"
+              >
+                <mat-icon class="message-list__reply-icon">reply</mat-icon>
+                <span class="text-label-small">Replying to a deleted message</span>
+              </div>
+            } @else {
+              <button
+                type="button"
+                class="message-list__reply-quote gap-2 p-2 bg-surface-container-low border-l-primary text-on-surface-variant"
+                (click)="scrollToMessage(m.replyTo.id)"
+                [attr.aria-label]="'Jump to replied message from ' + m.replyTo.username"
+              >
+                <mat-icon class="message-list__reply-icon">reply</mat-icon>
+                <span class="text-label-small text-primary message-list__reply-username">
+                  &#64;{{ m.replyTo.username }}
+                </span>
+                <span class="text-label-small message-list__reply-preview">
+                  {{ m.replyTo.bodyPreview }}
+                </span>
+              </button>
+            }
+          }
+
           <header class="message-list__meta gap-2">
             <span class="text-title-small text-primary">{{ m.username }}</span>
             <time class="text-label-small text-on-surface-variant">
               {{ m.createdAt | date: 'shortTime' }}
             </time>
+            @if (!isDmFrozen()) {
+              <div class="message-list__toolbar ml-auto gap-1">
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="message-list__action"
+                  matTooltip="Reply"
+                  aria-label="Reply to message"
+                  (click)="onReplyClick(m)"
+                >
+                  <mat-icon>reply</mat-icon>
+                </button>
+                @if (canEditOrDelete(m)) {
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="message-list__action"
+                    matTooltip="Edit"
+                    aria-label="Edit message"
+                    [disabled]="editingMessageId() === m.id"
+                    (click)="onEditClick(m)"
+                  >
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="message-list__action"
+                    matTooltip="Delete"
+                    aria-label="Delete message"
+                    (click)="onDeleteClick(m)"
+                  >
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                }
+              </div>
+            }
           </header>
-          @if (m.body) {
-            <p class="message-list__body text-body-medium m-0">{{ m.body }}</p>
-          }
+
           @if (m.attachments?.length) {
             <div class="message-list__attachments gap-2 mt-1">
               @for (att of m.attachments; track att.id) {
                 <app-message-attachment [att]="att" (loaded)="onAttachmentLoaded()" />
               }
             </div>
+          }
+
+          @if (editingMessageId() === m.id) {
+            <div class="message-list__editor gap-2 mt-1">
+              <mat-form-field appearance="outline" class="message-list__editor-field">
+                <textarea
+                  #editTextarea
+                  matInput
+                  cdkTextareaAutosize
+                  cdkAutosizeMinRows="1"
+                  cdkAutosizeMaxRows="10"
+                  [formControl]="editControl"
+                  maxlength="3072"
+                  (keydown)="onEditKeydown($event)"
+                  placeholder="Edit message — Esc to cancel, Ctrl+Enter to save"
+                ></textarea>
+                @if (
+                  editControl.hasError('maxlength') && editControl.touched
+                ) {
+                  <mat-error>Message must be at most 3072 characters</mat-error>
+                }
+              </mat-form-field>
+              <div class="message-list__editor-actions gap-2">
+                <span class="text-label-small text-on-surface-variant mr-auto">
+                  Esc to cancel · Ctrl+Enter to save
+                </span>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  (click)="onEditCancel()"
+                  [disabled]="editSaving()"
+                >
+                  Cancel
+                </button>
+                <button
+                  mat-flat-button
+                  color="primary"
+                  type="button"
+                  (click)="onEditSave()"
+                  [disabled]="editSaving()"
+                >
+                  @if (editSaving()) {
+                    <mat-progress-spinner diameter="18" mode="indeterminate" />
+                  } @else {
+                    Save
+                  }
+                </button>
+              </div>
+            </div>
+          } @else if (m.body) {
+            <p class="message-list__body text-body-medium m-0">
+              <span>{{ m.body }}</span>
+              @if (m.editedAt) {
+                <span class="text-label-small text-on-surface-variant message-list__edited">
+                  (edited)
+                </span>
+              }
+            </p>
+          } @else if (m.editedAt) {
+            <p class="message-list__body text-body-medium m-0">
+              <span class="text-label-small text-on-surface-variant message-list__edited">
+                (edited)
+              </span>
+            </p>
           }
         </article>
       }

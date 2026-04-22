@@ -62,6 +62,11 @@ const sendMessageSchema = z.object({
   // exact `Invalid attachment reference` ack string instead of the
   // `Invalid payload` bucket that malformed-shape failures share.
   attachmentIds: z.array(z.string().uuid()).optional(),
+  // Round 10 — optional. When present, must be a UUID and must refer to a
+  // message in the SAME `roomId`. Cross-room / unknown-id checks live in the
+  // service (`persistMessage` → `'Invalid reply target'`). Malformed UUIDs
+  // fall into the `'Invalid payload'` bucket via this schema.
+  replyToId: z.string().uuid().optional(),
 });
 
 // Per-socket token bucket for `message:send`: 5 messages/sec refill, burst 10.
@@ -229,6 +234,7 @@ export function initSocketIo(
             parsed.data.roomId,
             body,
             attachmentIds,
+            parsed.data.replyToId,
           );
 
           ack({ ok: true, message });

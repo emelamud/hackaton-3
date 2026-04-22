@@ -276,9 +276,17 @@ Return a page of messages for infinite-scroll-upwards. Caller must be a current 
       "username": "alice",
       "body": "hello team",
       "createdAt": "ISO",
+      "editedAt": null,
       "attachments": [
         { "id": "uuid", "roomId": "uuid", "uploaderId": "uuid", "filename": "pic.png", "mimeType": "image/png", "sizeBytes": 123, "kind": "image", "comment": null, "createdAt": "ISO" }
-      ]
+      ],
+      "replyTo": {
+        "id": "uuid",
+        "userId": "uuid",
+        "username": "bob",
+        "bodyPreview": "earlier message body…",
+        "createdAt": "ISO"
+      }
     }
   ],
   "hasMore": true
@@ -288,6 +296,8 @@ Return a page of messages for infinite-scroll-upwards. Caller must be a current 
 Ordering: `createdAt` ascending (oldest first, newest last) so the FE can prepend a page wholesale.
 
 Each `Message` carries `attachments` populated exactly as `message:send` ack / `message:new` do (Round 8). The server batch-fetches attached rows per page (`WHERE message_id = ANY($messageIds) AND status='attached'`) — no N+1. Messages with no attachments omit the field (not `attachments: []`), preserving wire parity with pre-Round-8 assertions.
+
+Round 10: each `Message` also carries `editedAt` (ALWAYS present — `null` for unedited messages, ISO string for edited ones) and optionally `replyTo` (OMITTED when the message is not a reply; PRESENT AS `null` when the message was a reply but the original target has since been hard-deleted — `messages.reply_to_id` FK uses `ON DELETE SET NULL`). Reply previews are batch-hydrated server-side per page (`WHERE id = ANY($replyTargetIds)`) — one extra query per page, no N+1. `replyTo.bodyPreview` is a raw server-side `.slice(0, 140)` of the target body; no ellipsis suffix.
 
 `hasMore` is derived server-side from a `limit+1` fetch: the server asks for one extra row past the requested `limit`; presence of that extra row sets `hasMore=true`, and the extra row is then dropped from the response. The FE uses `messages[0].id` as the next `?before` cursor — no separate `nextCursor` field is emitted.
 
@@ -925,6 +935,72 @@ Ordering is `createdAt DESC, id DESC` — newest public channels first.
 
 ---
 
+## Message Endpoints
+
+All message endpoints require `Authorization: Bearer <accessToken>` and return `401 { "error": "..." }` on missing / invalid / expired access tokens.
+
+### Rules
+- Edit / delete are strictly **author-only** in Round 10. Room-admin delete lands in Round 11 (§master-plan) — this round scopes to authors mutating their own messages.
+- **Hard delete**. `DELETE /api/messages/:id` removes the row; attachment rows cascade via FK; on-disk attachment files are unlinked by the service AFTER the DB transaction commits (best-effort; unlink failures are logged at WARN and are NOT propagated to the client — an orphaned file is worse than a phantom 500).
+- `messages.reply_to_id` uses `ON DELETE SET NULL`. A message that reply-references a deleted target keeps its text and attachments; its `replyTo` field on future `GET /api/rooms/:id/messages` responses becomes `null` (present-but-null preserves the "was a reply" signal).
+- **DM ban gate**: when the message lives in a DM and a `user_bans` row exists in either direction between the two participants, PATCH and DELETE both return `403 { "error": "Personal messaging is blocked" }` (matches the `message:send` ack and `POST /api/attachments` gate from Round 6 / Round 8). Channel rooms never consult user-bans. Uniform freeze: once banned, neither side may edit nor delete their own messages in that DM.
+- **Membership gate**: caller must be a current member of the message's `roomId`. Former members see `404 { "error": "Message not found" }` — same string as the non-existence response, so leaving a room does not reveal message-existence history.
+- **Body validation on edit** mirrors the `message:send` rule: trimmed body must be 1–3072 chars, OR empty-after-trim is allowed when the message has at least one attached attachment (attachment-only messages stay valid after body clear).
+- Editing does NOT modify attachments (no attach/detach in Round 10). Deleting drops attachments via cascade + unlink.
+
+### Summary
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| PATCH | `/api/messages/:id` | `EditMessageRequest` | `200 Message` (with `editedAt` set, attachments + replyTo hydrated) + `message:edit` broadcast to `room:<roomId>` | `400` validation / empty-body-with-no-attachments, `403` not the author / DM blocked, `404` not found / not a member |
+| DELETE | `/api/messages/:id` | — | `204` + `message:delete` broadcast to `room:<roomId>` | `403` not the author / DM blocked, `404` not found / not a member |
+
+---
+
+### PATCH `/api/messages/:id`
+
+Edit the message body. Author only.
+
+**Request body** (`EditMessageRequest`):
+```json
+{ "body": "updated text" }
+```
+
+**Body validation**:
+- `body` — required string, trimmed length 1–3072 chars. Trim-to-empty is permitted ONLY when the message has ≥1 attached attachment (attachment-only messages may have body cleared).
+
+**Success** `200` — the updated `Message` (with `editedAt` set to server `now()`, attachments and `replyTo` hydrated identically to `GET /api/rooms/:id/messages`). Server also emits `message:edit` with the same `Message` payload to `room:<roomId>` (ALL sockets — the author's own mutating tab receives its own broadcast; reconciling an in-flight edit against the same payload is a no-op in the FE).
+
+**Errors** (evaluated in this order — clients rely on the order for the correct UX string):
+- `401` — missing / invalid / expired access token.
+- `404` — message id does not exist OR the caller is not a current member of the message's room: `{ "error": "Message not found" }`.
+- `403` — caller is not the message author: `{ "error": "Only the author can edit this message" }`.
+- `403` — target room is a DM and a `user_bans` row exists in either direction: `{ "error": "Personal messaging is blocked" }`.
+- `400` — validation error: `{ "error": "Validation failed", "details": [...] }`.
+- `400` — trimmed body empty AND the message has no attachments: `{ "error": "Body must be between 1 and 3072 characters" }` (verbatim reuse of the `message:send` string — Round 10 does not introduce a second failure shape for this class).
+
+---
+
+### DELETE `/api/messages/:id`
+
+Delete the message. Hard delete — row + attachment cascade + on-disk file unlink. Author only.
+
+**Success** `204`. Server emits `message:delete` with `{ roomId, messageId }` to `room:<roomId>` (ALL sockets — the author's own mutating tab included, same rationale as `message:edit`).
+
+**Errors**:
+- `401` — missing / invalid / expired access token.
+- `404` — message id does not exist OR the caller is not a current member of the message's room: `{ "error": "Message not found" }`.
+- `403` — caller is not the message author: `{ "error": "Only the author can delete this message" }`.
+- `403` — target room is a DM and a `user_bans` row exists in either direction: `{ "error": "Personal messaging is blocked" }`.
+
+**Side effects**:
+- Any `attachments` rows pointing at this message cascade via FK (schema already has `onDelete: 'cascade'`).
+- On-disk files backing those attachments are `fs.promises.unlink`ed AFTER the DB transaction commits. Unlink failures are logged at WARN and do NOT fail the HTTP response (the DB state is already authoritative; an orphaned file is worse than a phantom 500).
+- Any `messages` rows with `reply_to_id = :id` have their `reply_to_id` set to NULL via the FK constraint. Those messages stay visible; their `replyTo` field on future `GET /api/rooms/:id/messages` responses becomes `null`.
+- Room unread counts (Round 12) naturally drop — the live-computed query against `messages` stops counting deleted rows with no cursor mutation needed.
+
+---
+
 ## Socket Events
 
 Socket.io v4 channel for real-time messaging. Runs on the same HTTP server as Express.
@@ -958,7 +1034,7 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
 #### `message:send`
 - Payload (`SendMessagePayload`):
   ```json
-  { "roomId": "uuid", "body": "hello team", "attachmentIds": ["uuid", "uuid"] }
+  { "roomId": "uuid", "body": "hello team", "attachmentIds": ["uuid", "uuid"], "replyToId": "uuid" }
   ```
 - **An ack callback is required** — the server always invokes it.
 - Validation:
@@ -966,6 +1042,7 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
   - `roomId` is a UUID.
   - Caller must be a member of the room.
   - **Round 8**: `attachmentIds` is optional; when present, each id must be a UUID, at most 5 ids per send, and each id must refer to a row with `status='pending'`, `uploader_id = caller`, `room_id = payload.roomId`. Any of those mismatches fails the send (see `Invalid attachment reference` ack below).
+  - **Round 10**: `replyToId` is optional; when present, must be a UUID and must reference an existing message in the SAME `roomId` as the new message. Cross-room or unknown id fails the send with the `Invalid reply target` ack string (see below).
 - Ack (`MessageSendAck`):
   - Success:
     ```json
@@ -978,21 +1055,31 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
         "username": "alice",
         "body": "hello team",
         "createdAt": "ISO",
+        "editedAt": null,
         "attachments": [
           { "id": "uuid", "roomId": "uuid", "uploaderId": "uuid", "filename": "pic.png", "mimeType": "image/png", "sizeBytes": 123, "kind": "image", "comment": null, "createdAt": "ISO" }
-        ]
+        ],
+        "replyTo": {
+          "id": "uuid",
+          "userId": "uuid",
+          "username": "bob",
+          "bodyPreview": "earlier message body…",
+          "createdAt": "ISO"
+        }
       }
     }
     ```
-    `message.attachments` is populated when the send referenced `attachmentIds`; omitted otherwise (matches the optional field on the shared `Message` type).
+    `message.attachments` is populated when the send referenced `attachmentIds`; omitted otherwise. `message.editedAt` is ALWAYS present (`null` on a fresh send). `message.replyTo` is populated (as a `ReplyPreview`) when the send referenced `replyToId`; omitted otherwise (same omit-when-absent convention as `attachments`).
   - Failure (specific strings — must match verbatim so clients can assert on them):
     - `{ "ok": false, "error": "Body must be between 1 and 3072 characters" }` — covers empty-body-AND-no-attachments sends as well as over-length body.
     - `{ "ok": false, "error": "Not a room member" }`
     - `{ "ok": false, "error": "Room not found" }`
-    - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields / non-array `attachmentIds`.
+    - `{ "ok": false, "error": "Invalid payload" }` — malformed `roomId` / non-string `body` / missing fields / non-array `attachmentIds` / malformed `replyToId`.
     - `{ "ok": false, "error": "Invalid attachment reference" }` — Round 8; any `attachmentIds` validation failure (wrong uploader, wrong room, already attached, unknown id, more than 5 ids). Single generic string — the client cannot usefully distinguish the sub-cases.
+    - `{ "ok": false, "error": "Invalid reply target" }` — Round 10; `replyToId` references an unknown message OR a message in a different room. Single generic string — the FE surfaces a snackbar and clears the reply chip.
     - `{ "ok": false, "error": "Personal messaging is blocked" }` — target room has `type='dm'` and a `user_bans` row exists in either direction between the two participants (Round 6). Only fires for DMs; channel rooms never produce this ack.
 - **Round 8**: on success the server atomically flips each referenced attachment's `status` to `'attached'` and sets `message_id` in the same transaction that inserts the `messages` row. Partial failure inside the transaction rolls back the message insert; the pending rows stay `pending` and the orphan sweep eventually cleans them.
+- **Round 10**: `replyToId` is resolved BEFORE the insert transaction (lightweight `SELECT id FROM messages WHERE id=$1 AND room_id=$2` — rejects cross-room or unknown ids with the `Invalid reply target` ack). The resolved `reply_to_id` is persisted on the message row; the ack's `message.replyTo` is hydrated from the target's current content (username + first 140 chars of the target's body at send time).
 - On success the server additionally broadcasts `message:new` (see below) to everyone in `room:<roomId>` **except the sender socket**. The sender renders its own message from the ack, so the broadcast excludes it to avoid duplicates. Other tabs of the same user receive the broadcast normally (different sockets, same user).
 
 #### `presence:active`
@@ -1020,10 +1107,22 @@ Clients do **not** need to reconnect or re-subscribe when they create/join/leave
 #### `message:new`
 - Payload: `Message` (fully denormalised, including `username`).
   ```json
-  { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "bob", "body": "hey", "createdAt": "ISO" }
+  { "id": "uuid", "roomId": "uuid", "userId": "uuid", "username": "bob", "body": "hey", "createdAt": "ISO", "editedAt": null }
   ```
 - Round 8: `message.attachments` (array of `Attachment`) is populated whenever the original `message:send` referenced one or more attachment ids. Absent for attachment-less messages — keeping the field optional preserves wire parity with pre-Round-8 smoke assertions.
+- Round 10: `message.editedAt` is ALWAYS present (`null` on a fresh send — the event only ever fires on INSERT, never on edit; subsequent edits surface via `message:edit`). `message.replyTo` (a `ReplyPreview`) is populated whenever the send referenced `replyToId`; omitted otherwise.
 - Fired to all sockets in `room:<roomId>` **except the sender socket** (`socket.to('room:<roomId>').emit(...)`). Clients are subscribed to every room they belong to, so they must filter by `roomId` when deciding which room's pane to render into.
+
+#### `message:edit`
+- Payload: `Message` (fully hydrated — body updated, `editedAt` set to server `now()`, attachments + `replyTo` populated exactly as `GET /api/rooms/:id/messages` returns them).
+- Fired to ALL sockets in `room:<roomId>` after `PATCH /api/messages/:id` succeeds, INCLUDING the author's own mutating tab. The author's HTTP `200` response arrives first; the broadcast is a reconcile no-op for that tab and a live update for the author's other tabs / devices. Divergent from `message:new`'s sender-exclusion pattern — the HTTP caller has no socket handle, so blanket fan-out is simpler than per-caller exclusion.
+- FE applies by id: find the matching message in the rendered page and replace wholesale. If the message id is not currently loaded (e.g. it was on a page that has been evicted — not possible today; unbounded pages), the event is dropped silently.
+
+#### `message:delete`
+- Payload: `MessageDeletedPayload` — `{ "roomId": "uuid", "messageId": "uuid" }`.
+- Fired to ALL sockets in `room:<roomId>` after `DELETE /api/messages/:id` succeeds — including the author's own tab. Same blanket-fan-out rationale as `message:edit`.
+- FE applies by id: remove the matching message from the rendered page. No `deletedAt` / tombstone payload — the row is gone; the list simply filters it out.
+- Unread badges (Round 12) do NOT update live on this event — the sidebar is refreshed on the next `GET /api/unread` or on normal accrual. A room you had 5 unread in, where one of those is now deleted, still shows 5 until the next refresh. Hackathon trade-off; flagged in Config improvements.
 
 #### `invitation:new`
 - Payload: `Invitation` (fully denormalised — includes `roomName` and `invitedByUsername`).

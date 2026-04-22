@@ -42,11 +42,18 @@
       }
     </header>
 
-    <app-message-list class="room-view__messages" [roomId]="r.id" />
+    <app-message-list
+      class="room-view__messages"
+      [roomId]="r.id"
+      [roomDetail]="r"
+      (replyRequested)="replyTarget.set($event)"
+    />
     <app-message-composer
       class="room-view__composer"
       [roomDetail]="r"
+      [replyTarget]="replyTarget()"
       (messageSent)="onMessageSent($event)"
+      (replyTargetCleared)="replyTarget.set(null)"
     />
   } @else if (loadError()) {
     <div class="room-view__error bg-error-container text-on-error-container p-4 m-5 gap-3">

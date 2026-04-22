@@ -31,6 +31,9 @@ import type { Message, RoomDetail } from '@shared';
 /** Max concurrent pending attachments per message (mirrors BE cap — contract D2). */
 const MAX_ATTACHMENTS = 5;
 
+/** Character cap on the reply-target preview rendered in the composer chip. */
+const REPLY_PREVIEW_MAX = 80;
+
 /**
  * Local-only state for a single pending attachment while the user is composing.
  * Stored on a signal array so template bindings stay reactive; the signal is
@@ -95,11 +98,35 @@ export class MessageComposerComponent {
   }
 
   /**
+   * Reply target lifted to the parent (`RoomViewComponent`). The composer
+   * renders a chip above the textarea when present and forwards the id on
+   * `message:send`. Mirrored into a signal so derivations recompute.
+   */
+  private readonly replyTargetSignal = signal<Message | null>(null);
+  readonly replyTargetView = this.replyTargetSignal.asReadonly();
+
+  @Input() set replyTarget(value: Message | null) {
+    this.replyTargetSignal.set(value);
+    // Refocus the textarea when the parent pushes a new reply target so the
+    // user can start typing without an extra click.
+    if (value) {
+      queueMicrotask(() => this.textarea?.nativeElement.focus());
+    }
+  }
+
+  /**
    * Emitted when the server acks a sent message. The parent (`RoomViewComponent`)
    * forwards this to `MessageListComponent.appendMessage()` so the sender's
    * own message shows up immediately (the server broadcast excludes the sender).
    */
   @Output() readonly messageSent = new EventEmitter<Message>();
+
+  /**
+   * Emitted when the user clicks the × on the reply chip, when the composer
+   * auto-clears the chip after a successful send, or when the server rejects
+   * the send with `'Invalid reply target'`. Parent owns the state.
+   */
+  @Output() readonly replyTargetCleared = new EventEmitter<void>();
 
   @ViewChild('textarea') textarea?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('autosize') autosize?: CdkTextareaAutosize;
@@ -114,6 +141,16 @@ export class MessageComposerComponent {
     const r = this.roomSignal();
     if (!r || r.type !== 'dm' || !r.dmPeer) return false;
     return this.userBansService.isBanned(r.dmPeer.userId);
+  });
+
+  /** Display-ready truncated preview for the reply chip. */
+  readonly replyPreview = computed(() => {
+    const t = this.replyTargetSignal();
+    if (!t) return null;
+    const raw = (t.body ?? '').trim();
+    const truncated =
+      raw.length > REPLY_PREVIEW_MAX ? `${raw.slice(0, REPLY_PREVIEW_MAX)}…` : raw;
+    return { username: t.username, body: truncated };
   });
 
   /** `true` while any pending chip has finished-uploading without an error. */
@@ -226,6 +263,10 @@ export class MessageComposerComponent {
     });
   }
 
+  clearReplyTarget(): void {
+    this.replyTargetCleared.emit();
+  }
+
   trackByLocalId = (_i: number, a: PendingAttachment): string => a.localId;
 
   onSubmit(): void {
@@ -264,14 +305,24 @@ export class MessageComposerComponent {
 
   private async runSubmit(roomId: string, body: string): Promise<void> {
     const currentRoom = this.roomSignal();
+    const replyToId = this.replyTargetSignal()?.id;
     try {
       const uploadedIds = await this.uploadAll(roomId);
       // If an upload just errored out, `uploadAll` throws below; otherwise
       // `uploadedIds` holds one id per pending entry in original order.
+      const sendOptions: { attachmentIds?: string[]; replyToId?: string } = {};
+      if (uploadedIds.length) sendOptions.attachmentIds = uploadedIds;
+      if (replyToId) sendOptions.replyToId = replyToId;
       const message = await firstValueFrom(
-        this.messagesService.send(roomId, body, uploadedIds.length ? uploadedIds : undefined),
+        this.messagesService.send(
+          roomId,
+          body,
+          Object.keys(sendOptions).length ? sendOptions : undefined,
+        ),
       );
       this.messageSent.emit(message);
+      // Clear the lifted reply target on success so the next send starts fresh.
+      if (replyToId) this.replyTargetCleared.emit();
       this.resetComposerAfterSend();
     } catch (err) {
       this.submitting.set(false);
@@ -296,6 +347,17 @@ export class MessageComposerComponent {
         // drift). Clear the rail so the user starts fresh.
         this.clearPending();
         this.serverError.set('Attachments expired; please re-attach.');
+      } else if (msg === 'Invalid reply target') {
+        // Server rejected because the reply target is gone (deleted) or
+        // cross-room. Surface a snackbar + clear the reply chip so the user
+        // can retry as a plain message.
+        this.snackBar.open(
+          'The message you were replying to is no longer available.',
+          'Dismiss',
+          { duration: 5000 },
+        );
+        this.serverError.set(null);
+        this.replyTargetCleared.emit();
       } else if (msg === 'Personal messaging is blocked') {
         this.markIncomingBanIfDm(currentRoom);
       }

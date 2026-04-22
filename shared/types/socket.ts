@@ -1,4 +1,4 @@
-import type { Message } from './message';
+import type { Message, MessageDeletedPayload } from './message';
 import type { RoomDetail } from './room';
 import type { Invitation, InvitationRevokedPayload } from './invitation';
 import type {
@@ -14,6 +14,8 @@ import type { RoomReadPayload } from './unread';
 
 export interface ServerToClientEvents {
   'message:new': Message;
+  'message:edit': Message;
+  'message:delete': MessageDeletedPayload;
   'room:updated': RoomDetail;
   'invitation:new': Invitation;
   'invitation:revoked': InvitationRevokedPayload;

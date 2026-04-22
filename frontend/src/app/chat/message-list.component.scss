@@ -42,11 +42,15 @@
 .message-list__row {
   display: flex;
   flex-direction: column;
+  // Positioning context used only to keep the toolbar aligned; the toolbar
+  // itself sits inside the flex header row.
+  position: relative;
 }
 
 .message-list__meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  min-height: 1.5rem;
 }
 
 .message-list__body {
@@ -54,9 +58,127 @@
   overflow-wrap: anywhere;
 }
 
+.message-list__edited {
+  // Small tail after the body — keeps the Slack-convention visual.
+  margin-left: 0.25rem;
+  vertical-align: baseline;
+}
+
 .message-list__attachments {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+}
+
+// -----------------------------------------------------------------------------
+// Hover toolbar
+// -----------------------------------------------------------------------------
+.message-list__toolbar {
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-in-out;
+}
+
+.message-list__row:hover .message-list__toolbar,
+.message-list__row:focus-within .message-list__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-list__action {
+  // Tighter than default icon-button — keeps the toolbar dense at message
+  // heights. Using `transform: scale` would break the 48x48 tap target that
+  // Material's a11y layer adds, so we just trim the visual padding.
+  width: 2rem;
+  height: 2rem;
+  line-height: 2rem;
+}
+
+.message-list__action ::ng-deep .mat-mdc-button-touch-target {
+  // Preserve the 48x48 tap target a11y requirement even though the visible
+  // footprint is smaller.
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+// -----------------------------------------------------------------------------
+// Reply quote block
+// -----------------------------------------------------------------------------
+.message-list__reply-quote {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 0.25rem;
+  text-align: left;
+  // Buttons carry default form styling; flatten for this quote-chip variant
+  // so utility backgrounds + borders win.
+  background-color: inherit; // overridden by bg utility on the element
+  border-width: 0;
+  border-left-width: 0.1875rem;
+  border-left-style: solid;
+  cursor: pointer;
+  font: inherit;
+  width: 100%;
+  transition: background-color 120ms ease-in-out;
+}
+
+.message-list__reply-quote--deleted {
+  cursor: default;
+}
+
+.message-list__reply-icon {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+  line-height: 1rem;
+}
+
+.message-list__reply-username {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+
+.message-list__reply-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// -----------------------------------------------------------------------------
+// Inline edit mode
+// -----------------------------------------------------------------------------
+.message-list__editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-list__editor-field {
+  width: 100%;
+}
+
+.message-list__editor-field ::ng-deep .mat-mdc-form-field-subscript-wrapper:empty {
+  // Strip the reserved subscript line so Save/Cancel sit flush under the
+  // textarea when there's no active error.
+  display: none;
+}
+
+.message-list__editor-actions {
+  display: flex;
+  align-items: center;
+}
+
+// Below md (905px / 56.5rem) the toolbar becomes always-visible: hover is
+// unreliable on touch, and the density tradeoff at narrow widths favours
+// discoverability over cleanliness.
+@media (max-width: 56.5rem) {
+  .message-list__toolbar {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }

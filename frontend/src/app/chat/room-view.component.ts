@@ -65,6 +65,16 @@ export class RoomViewComponent implements OnDestroy {
   readonly loadError = signal(false);
   readonly room = signal<RoomDetail | null>(null);
 
+  /**
+   * Round 10: reply-target state lifted here so `MessageListComponent`
+   * (which decides which row is being replied to) and `MessageComposerComponent`
+   * (which renders the chip + sends `replyToId`) stay decoupled. The list
+   * emits `(replyRequested)`; the composer consumes `[replyTarget]` and emits
+   * `(replyTargetCleared)`. Cleared on every room swap — see the `paramMap`
+   * subscription below.
+   */
+  readonly replyTarget = signal<Message | null>(null);
+
   @ViewChild(MessageListComponent) messageList?: MessageListComponent;
 
   constructor() {
@@ -80,6 +90,9 @@ export class RoomViewComponent implements OnDestroy {
           this.loading.set(true);
           this.loadError.set(false);
           this.room.set(null);
+          // Drop any in-flight reply target — swapping rooms mid-compose
+          // shouldn't carry the chip into the new room.
+          this.replyTarget.set(null);
           this.chatContext.clear();
           this.unreadService.setActiveRoom(id);
           return this.roomsService.get(id);

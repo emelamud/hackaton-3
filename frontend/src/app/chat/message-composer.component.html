@@ -12,6 +12,31 @@
     novalidate
     class="composer p-3 bg-surface-container-low border-t-outline-variant"
   >
+    @if (replyPreview(); as preview) {
+      <div
+        class="composer__reply-chip gap-2 p-2 mb-2 bg-surface-container-low border-l-primary"
+      >
+        <mat-icon class="composer__reply-icon text-primary">reply</mat-icon>
+        <span class="composer__reply-text text-label-small text-on-surface-variant">
+          Replying to
+          <span class="text-primary">&#64;{{ preview.username }}</span
+          >@if (preview.body) {
+            <span>: {{ preview.body }}</span>
+          }
+        </span>
+        <button
+          mat-icon-button
+          type="button"
+          class="composer__reply-close"
+          aria-label="Clear reply"
+          [disabled]="submitting()"
+          (click)="clearReplyTarget()"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+    }
+
     @if (pendingAttachments().length > 0) {
       <div class="composer__rail gap-2 mb-2">
         @for (entry of pendingAttachments(); track trackByLocalId($index, entry)) {

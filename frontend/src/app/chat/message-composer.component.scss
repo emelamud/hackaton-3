@@ -43,6 +43,35 @@
   flex-wrap: wrap;
 }
 
+.composer__reply-chip {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 0.25rem;
+  border-left-width: 0.1875rem;
+  border-left-style: solid;
+}
+
+.composer__reply-icon {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+  line-height: 1rem;
+}
+
+.composer__reply-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__reply-close {
+  flex: 0 0 auto;
+}
+
 .composer__chip {
   display: flex;
   flex-direction: column;

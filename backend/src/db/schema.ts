@@ -10,6 +10,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -101,6 +102,17 @@ export const messages = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    // Round 10 — self-referential FK with ON DELETE SET NULL so deleting a
+    // reply target does NOT cascade-drop its replies; the replies' wire
+    // `replyTo` becomes null on subsequent reads (present-but-null preserves
+    // the "was a reply" signal).
+    replyToId: uuid('reply_to_id').references(
+      (): AnyPgColumn => messages.id,
+      { onDelete: 'set null' },
+    ),
+    // Round 10 — set by PATCH /api/messages/:id on every successful edit.
+    // Null means "never edited".
+    editedAt: timestamp('edited_at'),
   },
   (table) => ({
     // Needed for ORDER BY created_at history queries; Round 5 cursor pagination

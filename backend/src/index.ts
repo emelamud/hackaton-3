@@ -18,6 +18,7 @@ import {
 import { dmRouter } from './routes/dm';
 import { userBansRouter } from './routes/user-bans';
 import { attachmentsRouter } from './routes/attachments';
+import { messagesRouter } from './routes/messages';
 import { unreadRouter } from './routes/unread';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimit';
@@ -68,6 +69,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/dm', dmRouter);
 app.use('/api/user-bans', userBansRouter);
 app.use('/api/attachments', attachmentsRouter);
+app.use('/api/messages', messagesRouter);
 app.use('/api/unread', unreadRouter);
 
 app.use(errorHandler);
