@@ -1,11 +1,18 @@
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { messages, roomMembers, rooms, users } from '../db/schema';
+import {
+  attachments,
+  messages,
+  roomMembers,
+  rooms,
+  users,
+} from '../db/schema';
 import { AppError } from '../errors/AppError';
 import * as roomsService from './rooms.service';
 import * as userBansService from './user-bans.service';
 import * as attachmentsService from './attachments.service';
-import type { Attachment, Message } from '@shared';
+import { toAttachmentDto } from './attachments.service';
+import type { Attachment, Message, MessageHistoryResponse } from '@shared';
 
 async function assertRoomAndMembership(
   userId: string,
@@ -125,15 +132,55 @@ export async function persistMessage(
   return message;
 }
 
-export async function listRecentMessages(
+/**
+ * Cursor-paginated message history for `GET /api/rooms/:id/messages`.
+ *
+ * Ordering: returns one ascending page (oldest-first, newest-last) so the FE
+ * can prepend a page wholesale during infinite-scroll-up. Internally the query
+ * fetches descending (`ORDER BY created_at DESC, id DESC LIMIT N+1`) so the
+ * `before` cursor compares against the newest slice; the page is then reversed
+ * before serialisation.
+ *
+ * Cursor shape: when `params.before` is provided, we resolve the referenced
+ * message's `(createdAt, id)` and filter with a row-value comparison
+ * `(messages.createdAt, messages.id) < (cursor.createdAt, cursor.id)`. The
+ * `(createdAt, id)` tie-break is stable even when multiple messages share the
+ * same millisecond `createdAt` — a single `created_at < X` would silently drop
+ * the tail of a tied batch.
+ *
+ * `hasMore` is derived from a `limit + 1` fetch — if the extra row came back,
+ * there are older messages past the requested window. The extra row is dropped
+ * before reverse / serialisation.
+ *
+ * Attachments are batch-hydrated per page with one extra query
+ * (`WHERE message_id = ANY(...) AND status='attached'`) — never per-row. Rows
+ * with no attachments omit the field (wire parity with `message:send` ack /
+ * `message:new`).
+ */
+export async function listMessageHistory(
   userId: string,
   roomId: string,
-  limit = 50,
-): Promise<Message[]> {
+  params: { before?: string; limit: number },
+): Promise<MessageHistoryResponse> {
   await assertRoomAndMembership(userId, roomId);
 
-  // Fetch newest N first (so we get the latest slice), then reverse for
-  // ascending order (oldest first, newest last) per the contract.
+  // 1) Resolve cursor — both (id, roomId) must match so a valid UUID that
+  //    belongs to a different room still 400s (never leaks existence).
+  let cursor: { createdAt: Date; id: string } | undefined;
+  if (params.before) {
+    const [row] = await db
+      .select({ createdAt: messages.createdAt, id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.id, params.before), eq(messages.roomId, roomId)))
+      .limit(1);
+    if (!row) {
+      throw new AppError('Invalid cursor', 400);
+    }
+    cursor = row;
+  }
+
+  // 2) Fetch newest-first with row-value tie-break. Drizzle's sql template
+  //    emits the (a, b) < (c, d) form Postgres supports natively.
   const rows = await db
     .select({
       id: messages.id,
@@ -145,18 +192,66 @@ export async function listRecentMessages(
     })
     .from(messages)
     .innerJoin(users, eq(users.id, messages.userId))
-    .where(eq(messages.roomId, roomId))
-    .orderBy(desc(messages.createdAt))
-    .limit(limit);
+    .where(
+      and(
+        eq(messages.roomId, roomId),
+        cursor
+          ? sql`(${messages.createdAt}, ${messages.id}) < (${cursor.createdAt}, ${cursor.id})`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(messages.createdAt), desc(messages.id))
+    .limit(params.limit + 1);
 
-  return rows
-    .map((m) => ({
-      id: m.id,
-      roomId: m.roomId,
-      userId: m.userId,
-      username: m.username,
-      body: m.body,
-      createdAt: m.createdAt.toISOString(),
-    }))
-    .reverse();
+  // 3) Detect `hasMore` via the limit+1 probe row and trim.
+  const hasMore = rows.length > params.limit;
+  const page = hasMore ? rows.slice(0, params.limit) : rows;
+
+  // 4) Reverse to ascending for the wire (oldest first, newest last).
+  page.reverse();
+
+  // 5) Batch-hydrate attachments — one query, grouped by message_id in memory.
+  const messageIds = page.map((r) => r.id);
+  const byMessageId = new Map<string, Attachment[]>();
+  if (messageIds.length > 0) {
+    const attRows = await db
+      .select()
+      .from(attachments)
+      .where(
+        and(
+          inArray(attachments.messageId, messageIds),
+          eq(attachments.status, 'attached'),
+        ),
+      )
+      .orderBy(asc(attachments.createdAt));
+
+    for (const att of attRows) {
+      const dto = toAttachmentDto(att);
+      const mid = att.messageId;
+      if (!mid) continue; // narrow away the nullable FK
+      const list = byMessageId.get(mid) ?? [];
+      list.push(dto);
+      byMessageId.set(mid, list);
+    }
+  }
+
+  // 6) Shape response — omit `attachments` entirely when the message has none
+  //    so the wire matches `message:send` ack / `message:new` exactly.
+  const out: Message[] = page.map((r) => {
+    const msg: Message = {
+      id: r.id,
+      roomId: r.roomId,
+      userId: r.userId,
+      username: r.username,
+      body: r.body,
+      createdAt: r.createdAt.toISOString(),
+    };
+    const atts = byMessageId.get(r.id);
+    if (atts && atts.length > 0) {
+      msg.attachments = atts;
+    }
+    return msg;
+  });
+
+  return { messages: out, hasMore };
 }

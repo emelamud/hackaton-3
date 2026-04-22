@@ -57,8 +57,11 @@ Dispatch two agents **in the same message** so they run in parallel:
 When both subagents complete, capture `T_p2_end`. Parse the `TIMING:` line from each subagent's response into `T_be_start` / `T_be_end` / `T_fe_start` / `T_fe_end`. If a subagent forgot to emit the line, fall back to `T_p2_start` / `T_p2_end` for that row and note `(approx)` in the log entry's Notes field.
 
 ## Phase 3 — Frontend tester
-Check http://localhost:4300 with a short-timeout `curl`. If it's not responding, ask the user whether to bring the stack up with `docker compose up -d` and wait for confirmation. On "yes": run `docker compose up -d --build` in the background, then poll `curl http://localhost:4300` every few seconds until it returns 200 (cap at ~2 minutes). On "no": stop and wait for the user to start it themselves. Do not start the stack without an explicit go-ahead.
 
+### 3a. Rebuild + deploy the Docker stack (mandatory)
+Phase 2 lands source on disk but doesn't rebuild container images. Run `docker compose up -d --build` in the background to make the deployed app match the code under test, then poll `curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:4300/` until it returns `200` (cap ~2 minutes). If the rebuild fails or the poll times out, stop and report — do not dispatch the tester against a broken stack. No user confirmation needed; Docker caches unchanged layers, so a no-op rebuild finishes fast.
+
+### 3b. Dispatch the tester
 Dispatch **`frontend-tester`** with:
 - Round number N
 - Pointer to `plans/round-N/frontend_tasks.md` and `plans/round-N/frontend_work_summary.md`

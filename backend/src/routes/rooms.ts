@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { validate, validateParams } from '../middleware/validate';
+import { validate, validateParams, validateQuery } from '../middleware/validate';
 import { requireAuth } from '../middleware/auth';
 import * as roomsService from '../services/rooms.service';
 import * as messagesService from '../services/messages.service';
@@ -28,6 +28,14 @@ const patchRoomSchema = z.object({
 
 const idSchema = z.object({
   id: z.string().uuid(),
+});
+
+// Round 9 — cursor-paginated message history. `limit` default = 50, clamped
+// to [1, 100]; `before` is an optional message UUID that must exist in the
+// same room (checked in the service layer for the `Invalid cursor` 400).
+const messageHistoryQuerySchema = z.object({
+  before: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 // GET /api/rooms
@@ -78,11 +86,16 @@ roomsRouter.get(
 roomsRouter.get(
   '/:id/messages',
   validateParams(idSchema),
+  validateQuery(messageHistoryQuerySchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await messagesService.listRecentMessages(
+      const params = req.query as unknown as z.infer<
+        typeof messageHistoryQuerySchema
+      >;
+      const result = await messagesService.listMessageHistory(
         req.user!.id,
         req.params.id,
+        params,
       );
       res.status(200).json(result);
     } catch (err) {

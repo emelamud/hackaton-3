@@ -70,3 +70,27 @@
 | Wrap-up + review        | orchestrator        | 12:20:13 | 12:21:50 | 1m37s         | ✅ |
 
 - Notes: BE shipped clean — 19/19 smoke scenarios produced the expected payloads (raw JSON captured per-scenario in the summary). FE shipped clean — `pnpm lint` / `pnpm build` / `tsc --noEmit` all clean; design-system spot-check zero hits on `#hex`, `var(--mat-sys`, `px`, inline `style=`, `bypassSecurityTrust*`, `innerHTML`. Tester run **incomplete**: 8 / 12 UI scenarios verified (PASS — image upload, file upload, DND, paste, 5-cap + snackbar overflow, remove, per-attachment comment, size-cap failure); 4 unverified (attachment-only send, real-time broadcast to second user, DM ban gate, logout lifecycle, scroll anchoring on async image load) after Playwright MCP held a stale Chrome user-data-dir lock the tester couldn't clear. `bugs.md` logs `Open=0` with a documented coverage-gap section. Tester TIMING line never emitted (killed mid-run); end timestamp recorded at orchestrator kill time (`(approx)` flag). BE wire-layer smoke scenarios #15, #2, #16, #17, #19 cover the server side of every unverified UI case, so the risk surface for the gap is the UI binding, not the contract. Recommended next action: `/fix-bugs 8` or a fresh `frontend-tester` pass to close the UI coverage. Two BE judgement calls to flag for potential contract follow-up: (a) duplicate `attachmentIds` in one send rejected as `"Invalid attachment reference"` — worth noting explicitly in the contract; (b) `Content-Disposition` uses modern-only `filename*=UTF-8''…` with no legacy fallback.
+
+## Round 9
+
+### Planning — `/plan-round 9`
+- Started:  2026-04-22 12:34:45 +0300
+- Finished: 2026-04-22 12:43:20 +0300
+- Wall time: 8m36s
+- Output: `plans/round-9/{orchestrator,backend,frontend}_tasks.md`
+- Notes: Locked 10 design decisions for paginated history. Cursor = `messageId` (row-value `(created_at, id)` comparison for stable ties); response wrapped in `MessageHistoryResponse { messages, hasMore }` (supersedes Round-3's bare `Message[]` — BC break); default limit 50, max 100; `hasMore` derived from a `limit+1` fetch server-side (no off-by-one). Attachment hydration: one batch query per page (`SELECT … WHERE message_id = ANY(...)`), no N+1. Contract introduces one new error string (`"Invalid cursor"`) covering non-existent, wrong-room, or cross-boundary cursors; malformed-UUID cursors stay on the zod `"Validation failed"` envelope. Only one file under `/shared/` grows (`message.ts`); `api-contract.md` gets the `GET /api/rooms/:id/messages` block rewritten and the superseded Round-3 forward-reference deleted. FE plan covers infinite-scroll-upwards with scroll-anchor preservation: capture `scrollHeight` + `scrollTop` before prepend, restore in `ngAfterViewChecked` using the delta — coexists with Round 8's image `(loaded)` re-anchor because the bottom-pin branch is guarded on `isNearBottom()`. Top-of-list spinner + error+retry + "Start of conversation" sentinel states. No schema / migration / docker changes; existing `messages_room_created_idx(room_id, created_at)` covers the hot query, compound `(room_id, created_at, id)` flagged as a future config improvement only. No open questions.
+
+### Implementation — `/implement-round 9`
+- Started:  2026-04-22 12:51:30 +0300
+- Finished: 2026-04-22 14:15:13 +0300
+- Wall time: 1h23m43s
+
+| Phase                   | Agent               | Start    | End      | Duration | Status |
+|-------------------------|---------------------|----------|----------|----------|--------|
+| Shared types + contract | orchestrator        | 12:51:30 | 12:53:28 | 1m58s    | ✅ |
+| Backend impl            | backend-developer   | 12:55:18 | 13:40:49 | 45m31s   | ✅ |
+| Frontend impl           | frontend-developer  | 12:55:42 | 13:01:32 | 5m50s    | ✅ |
+| Frontend test           | frontend-tester     | 13:42:22 | 14:13:28 | 31m6s    | ⚠️ |
+| Wrap-up + review        | orchestrator        | 14:14:07 | 14:15:13 | 1m6s     | ✅ |
+
+- Notes: BE shipped clean — 15/15 smoke scenarios produced the expected payloads with verbatim JSON captured per-scenario (including the exactly-50 off-by-one regression trap and the 3 invalid-cursor variants). FE shipped clean — `pnpm lint` / `pnpm build` / `tsc --noEmit` clean, design-system spot-check zero hits. Tester run hit a **critical deployment blocker**: the FE Docker container was not rebuilt during Phase 2 (BE dev ran `docker compose up -d --build backend` as its gate, but the FE dev is explicitly told not to run `ng serve` or rebuild, so nothing rebuilt the FE container). Stale Round-8 bundle served against the new Round-9 BE shape caused `TypeError: t[Symbol.iterator] is not a function` on every room open, blocking all 9 UI scenarios. `bugs.md`: Open=2 Fixed=0 Verified=0 — Bug #1 is the FE container deployment blocker (no code change needed; `docker compose up -d --build frontend` resolves it); Bug #2 is a pre-existing Round-1 auth-interceptor race during 401 → refresh → retry on initial room load (surfaced because Round-9's iterator pattern is more sensitive to non-array values; partially masked by #1, needs re-verify after the FE rebuild). Zero API / contract deviations — BE matches the contract 100%. **Workflow improvement for future rounds**: `/implement-round` Phase 2 should rebuild BOTH service images before Phase 3 dispatches the tester; today only the BE is rebuilt as part of its smoke gate.

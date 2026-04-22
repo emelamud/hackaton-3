@@ -1,0 +1,12 @@
+{
+  "name": "round-9",
+  "version": "1.0.0",
+  "main": "smoke.js",
+  "scripts": {
+    "test": "node smoke.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0",
+    "socket.io-client": "^4.8.3"
+  }
+}

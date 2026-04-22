@@ -9,7 +9,27 @@
     <span class="text-body-medium">Unable to load messages.</span>
   </div>
 } @else {
-  <div #scrollContainer class="message-list__scroll px-5 py-4">
+  <div #scrollContainer class="message-list__scroll px-5 py-4" (scroll)="onScroll()">
+    @if (loadingMore()) {
+      <div class="message-list__top-state gap-2 py-3">
+        <mat-progress-spinner diameter="20" mode="indeterminate" />
+        <span class="text-label-small text-on-surface-variant">Loading older messages…</span>
+      </div>
+    } @else if (loadMoreError()) {
+      <div
+        class="message-list__top-state bg-error-container text-on-error-container gap-2 p-2 my-2"
+      >
+        <mat-icon>error_outline</mat-icon>
+        <span class="text-body-small">Could not load older messages.</span>
+        <button mat-button type="button" (click)="retryLoadMore()">Retry</button>
+      </div>
+    } @else if (!hasMore() && messages().length > 0) {
+      <div class="message-list__top-state gap-2 py-3 text-on-surface-variant">
+        <mat-icon>history</mat-icon>
+        <span class="text-label-small">Start of conversation</span>
+      </div>
+    }
+
     @if (messages().length === 0) {
       <div class="message-list__empty text-on-surface-variant gap-2 p-5">
         <mat-icon>chat_bubble_outline</mat-icon>

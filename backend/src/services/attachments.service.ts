@@ -49,8 +49,13 @@ export function isAllowedImageMime(mimeType: string): boolean {
  * Shape a DB row into the wire `Attachment` DTO — drops internal fields
  * (`status`, `messageId`, `storagePath`, `attachedAt`) that FE clients have
  * no need for per the shared contract.
+ *
+ * Exported (Round 9) so the message-history batch-hydrator in
+ * `messages.service.ts` can reuse the exact same field mapping used by
+ * `createPendingAttachment` and `commitAttachmentsToMessage` — keeps wire
+ * parity with `message:send` ack / `message:new` for free.
  */
-function toDto(row: {
+export function toAttachmentDto(row: {
   id: string;
   roomId: string;
   uploaderId: string;
@@ -145,7 +150,7 @@ export async function createPendingAttachment(args: {
     throw err;
   }
 
-  return toDto(inserted);
+  return toAttachmentDto(inserted);
 }
 
 /**
@@ -184,7 +189,7 @@ export async function getAttachmentForDownload(
   }
 
   return {
-    attachment: toDto(row),
+    attachment: toAttachmentDto(row),
     absolutePath: row.storagePath,
   };
 }
@@ -259,7 +264,7 @@ export async function commitAttachmentsToMessage(args: {
       throw new AppError('Invalid attachment reference', 400);
     }
 
-    results.push(toDto(updated));
+    results.push(toAttachmentDto(updated));
   }
 
   return results;

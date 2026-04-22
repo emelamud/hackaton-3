@@ -168,7 +168,7 @@ All rooms endpoints require `Authorization: Bearer <accessToken>` and return `40
 | GET | `/api/rooms/:id` | — | `200 RoomDetail` | `403` not a member, `404` not found |
 | POST | `/api/rooms/:id/join` | — | `200 RoomDetail` (idempotent if already member) | `403` private room, `404` not found |
 | POST | `/api/rooms/:id/leave` | — | `204` | `403` owner cannot leave, `404` not a member |
-| GET | `/api/rooms/:id/messages` | — | `200 Message[]` (oldest first, up to 50 most-recent) | `403` not a member, `404` not found |
+| GET | `/api/rooms/:id/messages` | `?before=<messageId>&limit=<1..100>` | `200 MessageHistoryResponse` (oldest-first page + `hasMore`) | `400` invalid cursor / validation, `403` not a member, `404` not found |
 | PATCH | `/api/rooms/:id` | `PatchRoomRequest` | `200 RoomDetail` + `room:updated` broadcast | `400` empty body / validation, `403` not owner/admin, `404` not found, `409` name taken |
 
 ---
@@ -257,27 +257,43 @@ Leave a room. The owner cannot leave their own room (requirement §2.4.5) — th
 ---
 
 ### GET `/api/rooms/:id/messages`
-Return up to the 50 most-recent messages in a room, ordered by `createdAt` **ascending** (oldest first, newest last) so clients can append directly to their scrollable list. Caller must be a member.
+Return a page of messages for infinite-scroll-upwards. Caller must be a current member of the room. Round 9 replaced the Round-3 bare-array response with `MessageHistoryResponse` to carry the `hasMore` signal — any caller that treated the body as an array must read from `.messages`.
 
-**Success** `200` — `Message[]`:
+**Query params**:
+- `limit` — optional integer, default `50`, min `1`, max `100`. Out-of-range → `400 { "error": "Validation failed", "details": [...] }`.
+- `before` — optional UUID. When present, only messages strictly OLDER than the referenced message are returned (row-value comparison on `(createdAt, id)` — ties on `createdAt` break by `id`). When absent, returns the newest page.
+
+**Success** `200` — `MessageHistoryResponse`:
 ```json
-[
-  {
-    "id": "uuid",
-    "roomId": "uuid",
-    "userId": "uuid",
-    "username": "alice",
-    "body": "hello team",
-    "createdAt": "ISO"
-  }
-]
+{
+  "messages": [
+    {
+      "id": "uuid",
+      "roomId": "uuid",
+      "userId": "uuid",
+      "username": "alice",
+      "body": "hello team",
+      "createdAt": "ISO",
+      "attachments": [
+        { "id": "uuid", "roomId": "uuid", "uploaderId": "uuid", "filename": "pic.png", "mimeType": "image/png", "sizeBytes": 123, "kind": "image", "comment": null, "createdAt": "ISO" }
+      ]
+    }
+  ],
+  "hasMore": true
+}
 ```
 
-**Errors**:
-- `403` — caller is not a member: `{ "error": "Not a room member" }`
-- `404` — room not found: `{ "error": "Room not found" }`
+Ordering: `createdAt` ascending (oldest first, newest last) so the FE can prepend a page wholesale.
 
-No cursor / `before` parameter in Round 3. Round 9 introduces `?before=<messageId>&limit=` and keeps the same response shape.
+Each `Message` carries `attachments` populated exactly as `message:send` ack / `message:new` do (Round 8). The server batch-fetches attached rows per page (`WHERE message_id = ANY($messageIds) AND status='attached'`) — no N+1. Messages with no attachments omit the field (not `attachments: []`), preserving wire parity with pre-Round-8 assertions.
+
+`hasMore` is derived server-side from a `limit+1` fetch: the server asks for one extra row past the requested `limit`; presence of that extra row sets `hasMore=true`, and the extra row is then dropped from the response. The FE uses `messages[0].id` as the next `?before` cursor — no separate `nextCursor` field is emitted.
+
+**Errors**:
+- `400` — `limit` outside `[1, 100]` or `before` malformed UUID: `{ "error": "Validation failed", "details": [...] }`.
+- `400` — `before` refers to a message that does not exist OR belongs to a different room: `{ "error": "Invalid cursor" }`. Cross-room ids 400 (not 404) so the endpoint does not leak existence of messages in other rooms.
+- `403` — caller is not a current member: `{ "error": "Not a room member" }`.
+- `404` — room not found: `{ "error": "Room not found" }`.
 
 ---
 

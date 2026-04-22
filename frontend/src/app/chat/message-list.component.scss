@@ -32,6 +32,13 @@
   margin: auto 0;
 }
 
+.message-list__top-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+}
+
 .message-list__row {
   display: flex;
   flex-direction: column;

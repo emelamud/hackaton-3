@@ -1,9 +1,14 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, filter, from, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { SocketService } from '../core/socket/socket.service';
-import type { Message, MessageSendAck, SendMessagePayload } from '@shared';
+import type {
+  Message,
+  MessageHistoryResponse,
+  MessageSendAck,
+  SendMessagePayload,
+} from '@shared';
 
 @Injectable({ providedIn: 'root' })
 export class MessagesService {
@@ -12,9 +17,33 @@ export class MessagesService {
 
   private readonly baseUrl = `${environment.apiUrl}/rooms`;
 
-  /** Return the up-to-50 most-recent messages for a room, oldest first. */
-  getRecent(roomId: string): Observable<Message[]> {
-    return this.http.get<Message[]>(`${this.baseUrl}/${roomId}/messages`);
+  /**
+   * Return a page of messages for the given room. Oldest first.
+   *
+   * Round 9: the endpoint response is now `MessageHistoryResponse`
+   * (`{ messages, hasMore }`) rather than a bare array, and accepts
+   * `?before=<messageId>` + `?limit=<1..100>` query params for paginate-
+   * upwards behaviour.
+   *
+   * Callers:
+   *  - `MessageListComponent.loadInitial()` passes no cursor → newest page.
+   *  - `MessageListComponent.loadMore()` passes `{ before: oldestLoadedId }`
+   *    to fetch the next older slice.
+   */
+  getHistory(
+    roomId: string,
+    options: { before?: string; limit?: number } = {},
+  ): Observable<MessageHistoryResponse> {
+    let params = new HttpParams();
+    if (options.before) {
+      params = params.set('before', options.before);
+    }
+    if (options.limit != null) {
+      params = params.set('limit', String(options.limit));
+    }
+    return this.http.get<MessageHistoryResponse>(`${this.baseUrl}/${roomId}/messages`, {
+      params,
+    });
   }
 
   /**

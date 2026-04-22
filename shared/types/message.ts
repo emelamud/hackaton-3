@@ -19,3 +19,8 @@ export interface SendMessagePayload {
 export type MessageSendAck =
   | { ok: true; message: Message }
   | { ok: false; error: string };
+
+export interface MessageHistoryResponse {
+  messages: Message[];
+  hasMore: boolean;
+}
